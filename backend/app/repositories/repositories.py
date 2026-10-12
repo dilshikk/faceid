@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models.models import (
     Incident,
+    IncidentStatus,
     LogEvent,
     MonitoredService,
     NotificationSetting,
@@ -113,15 +114,31 @@ def list_incidents(
     return rows, next_cursor
 
 
+def open_incident_for_service(db: Session, service_id: str) -> Incident | None:
+    """The most recent non-resolved incident for a service.
+
+    Uses first() rather than one_or_none(): legacy data may contain several
+    open incidents per service (old status-based fingerprints), and
+    one_or_none() would raise MultipleResultsFound and stall the worker.
+    """
+    return (
+        db.query(Incident)
+        .filter(Incident.service_id == service_id, Incident.status != IncidentStatus.resolved)
+        .order_by(desc(Incident.last_seen))
+        .first()
+    )
+
+
 def open_incident_for_fingerprint(db: Session, service_id: str, fingerprint: str) -> Incident | None:
     return (
         db.query(Incident)
         .filter(
             Incident.service_id == service_id,
             Incident.fingerprint == fingerprint,
-            Incident.status != "resolved",
+            Incident.status != IncidentStatus.resolved,
         )
-        .one_or_none()
+        .order_by(desc(Incident.last_seen))
+        .first()
     )
 
 
