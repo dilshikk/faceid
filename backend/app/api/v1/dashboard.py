@@ -1,5 +1,6 @@
 """Dashboard summary endpoint (TZ 4.1 and 7)."""
 from fastapi import APIRouter, Depends
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
@@ -43,20 +44,15 @@ def _count_services_by_latest_status(db: Session) -> dict[str, int]:
     return {status.value: count for status, count in rows}
 
 
-async def _telegram_healthy(db: Session) -> bool:
-    """Use the worker's latest recorded check (it runs every poll cycle).
-    Only call Telegram live when nothing has been recorded yet, so every
-    dashboard refresh does not hit the Telegram API."""
+def _recorded_telegram_health(db: Session) -> bool | None:
+    """The worker's latest recorded Telegram check (it runs every poll cycle),
+    or None when nothing has been recorded yet."""
     recorded = latest_health_check(db, "telegram")
-    if recorded is not None:
-        return recorded.is_healthy
-    return await check_telegram()
+    return recorded.is_healthy if recorded is not None else None
 
 
-@router.get("/summary", response_model=DashboardSummaryOut)
-async def summary(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def _build_summary(db: Session, telegram_healthy: bool) -> DashboardSummaryOut:
     by_status = _count_services_by_latest_status(db)
-
     last_check = db.query(func.max(ServiceStatusHistory.observed_at)).scalar()
     recent, _next_cursor = list_incidents(db, limit=10)
     metric = latest_server_metric(db)
@@ -88,5 +84,16 @@ async def summary(db: Session = Depends(get_db), _: User = Depends(get_current_u
             else None
         ),
         postgres_healthy=check_postgres(db),
-        telegram_healthy=await _telegram_healthy(db),
+        telegram_healthy=telegram_healthy,
     )
+
+
+@router.get("/summary", response_model=DashboardSummaryOut)
+async def summary(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    # The queries are synchronous, so they run in the threadpool; the event
+    # loop stays free for other requests. Only the live Telegram fallback
+    # (used before the worker has recorded anything) is awaited here.
+    telegram_healthy = await run_in_threadpool(_recorded_telegram_health, db)
+    if telegram_healthy is None:
+        telegram_healthy = await check_telegram()
+    return await run_in_threadpool(_build_summary, db, telegram_healthy)

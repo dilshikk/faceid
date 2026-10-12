@@ -3,6 +3,7 @@ import datetime as dt
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from app.core.rate_limit import mutation_rate_limiter
@@ -59,6 +60,11 @@ def _parse_journal_line(line: str, fallback: dt.datetime) -> LogEventOut:
     except ValueError:
         event_time = fallback
     return LogEventOut(level="info", message=match.group("msg"), event_time=event_time)
+
+
+def _unit_name_for(db: Session, service_id: str) -> str | None:
+    service = get_service(db, service_id)
+    return service.unit_name if service is not None else None
 
 
 @router.get("", response_model=PageOut[ServiceOut])
@@ -163,8 +169,10 @@ async def logs(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    service = get_service(db, service_id)
-    if service is None:
+    # This handler is async (it awaits journalctl), so the synchronous DB
+    # lookup goes through the threadpool instead of blocking the event loop.
+    unit_name = await run_in_threadpool(_unit_name_for, db, service_id)
+    if unit_name is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Service not found")
 
     # Live tail from journald (read-only, allowlisted unit), per TZ 4.3.
@@ -175,7 +183,7 @@ async def logs(
         since_utc = since if since.tzinfo else since.replace(tzinfo=dt.timezone.utc)
         since_arg = since_utc.astimezone(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
-    lines = await read_unit_logs(service.unit_name, limit, since=since_arg)
+    lines = await read_unit_logs(unit_name, limit, since=since_arg)
     now = dt.datetime.now(dt.timezone.utc)
     events = [_parse_journal_line(line, now) for line in lines]
 
