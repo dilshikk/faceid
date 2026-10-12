@@ -12,8 +12,15 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.db import SessionLocal
 from app.models.models import Incident, IncidentStatus, MonitoredService
-from app.repositories.repositories import latest_server_metric, latest_status, list_services
+from app.repositories.repositories import (
+    create_service,
+    latest_server_metric,
+    latest_status,
+    list_services,
+    silence_event_type,
+)
 from app.services.journal_reader import read_unit_logs
+from app.services.systemd_monitor import is_valid_unit_name, normalize_unit_name
 
 router = Router()
 
@@ -43,9 +50,11 @@ async def cmd_help(message: Message) -> None:
         "/status — сводка\n"
         "/services — список служб\n"
         "/service <unit> — детали\n"
+        "/addservice <имя> <unit> — зарегистрировать новую службу\n"
         "/logs <unit> — последние ошибки\n"
         "/incidents — открытые инциденты\n"
-        "/server — CPU/RAM/диск/uptime"
+        "/server — CPU/RAM/диск/uptime\n"
+        "/silence <event_type> <минуты> — утишить уведомления на N минут (0 — снять)"
     )
 
 
@@ -55,7 +64,7 @@ async def cmd_status(message: Message) -> None:
         return
     db = _db()
     try:
-        services = list_services(db)
+        services = list_services(db, limit=200)[0]
         lines = []
         for s in services:
             latest = latest_status(db, s.id)
@@ -71,7 +80,7 @@ async def cmd_services(message: Message) -> None:
         return
     db = _db()
     try:
-        names = [s.unit_name for s in list_services(db)]
+        names = [s.unit_name for s in list_services(db, limit=200)[0]]
         await message.answer("\n".join(names) or "Список пуст.")
     finally:
         db.close()
@@ -85,7 +94,9 @@ async def cmd_service(message: Message) -> None:
     if len(parts) < 2:
         await message.answer("Использование: /service <unit_name>")
         return
-    unit_name = parts[1].strip()
+    # Accept short names like "mado-bot" as shown in the TZ examples, not
+    # just the full "mado-bot.service".
+    unit_name = normalize_unit_name(parts[1])
     db = _db()
     try:
         service = (
@@ -104,6 +115,36 @@ async def cmd_service(message: Message) -> None:
         db.close()
 
 
+@router.message(Command("addservice"))
+async def cmd_addservice(message: Message) -> None:
+    """Register a new allowlisted service (TZ section 2). Previously the
+    only way to do this was a manual DB insert."""
+    if not _is_allowed(message.from_user.id):
+        return
+    parts = (message.text or "").split(maxsplit=2)
+    if len(parts) < 3:
+        await message.answer("Использование: /addservice <имя> <unit_name>")
+        return
+    name, raw_unit = parts[1], parts[2]
+    unit_name = normalize_unit_name(raw_unit)
+    if not is_valid_unit_name(unit_name):
+        await message.answer(
+            "Некорректное имя unit: без пробелов и слэшей, суффикс .service добавляется автоматически."
+        )
+        return
+    db = _db()
+    try:
+        existing = db.query(MonitoredService).filter(MonitoredService.unit_name == unit_name).one_or_none()
+        if existing is not None:
+            await message.answer("Служба уже зарегистрирована.")
+            return
+        settings = get_settings()
+        create_service(db, name, unit_name, settings.monitor_default_interval_seconds)
+        await message.answer(f"Служба {unit_name} добавлена в реестр.")
+    finally:
+        db.close()
+
+
 @router.message(Command("logs"))
 async def cmd_logs(message: Message) -> None:
     if not _is_allowed(message.from_user.id):
@@ -112,7 +153,7 @@ async def cmd_logs(message: Message) -> None:
     if len(parts) < 2:
         await message.answer("Использование: /logs <unit_name>")
         return
-    unit_name = parts[1].strip()
+    unit_name = normalize_unit_name(parts[1])
     db = _db()
     try:
         service = (
@@ -167,6 +208,22 @@ async def cmd_server(message: Message) -> None:
 
 @router.message(Command("silence"))
 async def cmd_silence(message: Message) -> None:
+    """Actually silence notifications for an event type (previously this
+    was a placeholder reply with no effect)."""
     if not _is_allowed(message.from_user.id):
         return
-    await message.answer("Утишение уведомлений настраивается в разделе настроек веб-панели.")
+    parts = (message.text or "").split(maxsplit=2)
+    if len(parts) < 3 or not parts[2].lstrip("-").isdigit():
+        await message.answer("Использование: /silence <event_type> <минуты> (0 — снять утишение)")
+        return
+    event_type, minutes_raw = parts[1], parts[2]
+    minutes = int(minutes_raw)
+    db = _db()
+    try:
+        silence_event_type(db, event_type, minutes)
+        if minutes > 0:
+            await message.answer(f"Уведомления '{event_type}' утишены на {minutes} мин.")
+        else:
+            await message.answer(f"Утишение для '{event_type}' снято.")
+    finally:
+        db.close()
