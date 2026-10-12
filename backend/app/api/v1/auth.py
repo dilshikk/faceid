@@ -2,10 +2,11 @@
 
 No secrets or password hashes are ever returned in a response body.
 """
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.rate_limit import login_rate_limiter
 from app.core.security import create_session, get_current_user, revoke_session, verify_password
 from app.db import get_db
 from app.models.models import AuditLog, User
@@ -14,7 +15,7 @@ from app.schemas.schemas import LoginRequest
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/login")
+@router.post("/login", dependencies=[Depends(login_rate_limiter)])
 def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)):
     settings = get_settings()
     user = db.query(User).filter(User.username == payload.username).one_or_none()
@@ -40,9 +41,18 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
 
 
 @router.post("/logout")
-def logout(response: Response, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def logout(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     settings = get_settings()
-    revoke_session(db, response.raw_headers and "")  # token cleared client-side via cookie expiry below
+    # Revoke the *actual* session token from the request cookie. Previously
+    # this read a value off the outgoing Response (always empty/falsy), so
+    # the session row in user_sessions was never deleted on logout.
+    token = request.cookies.get(settings.session_cookie_name, "")
+    revoke_session(db, token)
     response.delete_cookie(settings.session_cookie_name)
     db.add(AuditLog(actor=user.username, action="logout", result="success"))
     db.commit()

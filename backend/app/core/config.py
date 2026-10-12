@@ -29,6 +29,11 @@ class Settings(BaseSettings):
 
     log_fetch_limit: int = 500
 
+    # Days of service_status_history/log_events/notification_deliveries/
+    # health_checks to keep before the worker's retention cleanup deletes
+    # them (TZ acceptance criterion #12).
+    retention_days: int = 30
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

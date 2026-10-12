@@ -5,9 +5,7 @@ config_json or audit metadata. Tokens/passwords are masked before logging.
 """
 import datetime as dt
 import uuid
-from typing import Any
 
-import jwt
 from fastapi import Depends, HTTPException, Request, status
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
@@ -39,6 +37,14 @@ def create_session(db: Session, user: User) -> str:
 
 
 def revoke_session(db: Session, token: str) -> None:
+    """Delete the session row matching this exact token, if any.
+
+    Callers MUST pass the real cookie value (request.cookies.get(...)).
+    Passing an empty/falsy token here is a no-op by design: it must never
+    delete sessions by accident.
+    """
+    if not token:
+        return
     db.query(UserSession).filter(UserSession.token == token).delete()
     db.commit()
 
