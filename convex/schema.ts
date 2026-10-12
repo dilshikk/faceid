@@ -8,6 +8,13 @@ export default defineSchema({
     email: v.optional(v.string()),
   }).index("by_token", ["tokenIdentifier"]),
 
+  // E-mails (lowercase) that may open the panel. Admins also manage the list.
+  allowedEmails: defineTable({
+    email: v.string(),
+    isAdmin: v.boolean(),
+    addedBy: v.optional(v.string()),
+  }).index("by_email", ["email"]),
+
   // A bot = one external PostgreSQL database the admin wants to monitor.
   bots: defineTable({
     ownerToken: v.string(),
@@ -15,6 +22,13 @@ export default defineSchema({
     description: v.optional(v.string()),
     // Never returned to the client, only used by backend actions.
     connectionString: v.string(),
+    // Parts of the connection, kept so the form can show them again (no password).
+    dbHost: v.optional(v.string()),
+    dbPort: v.optional(v.number()),
+    dbName: v.optional(v.string()),
+    dbUser: v.optional(v.string()),
+    // Bot API token. Only used on the backend, never sent to the browser.
+    botToken: v.optional(v.string()),
     ssl: v.boolean(),
     // Tables inside the bot's database that map to each section of the panel.
     usersTable: v.optional(v.string()),

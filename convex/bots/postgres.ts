@@ -48,6 +48,8 @@ async function connect(bot: Doc<"bots">): Promise<Client> {
     ssl: bot.ssl ? { rejectUnauthorized: false } : undefined,
     connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
     statement_timeout: STATEMENT_TIMEOUT_MS,
+    // Even if the DB user has write rights, the panel session can only read.
+    options: "-c default_transaction_read_only=on",
   });
   // Without a listener an idle-connection error would crash the action.
   client.on("error", () => {});
@@ -60,15 +62,15 @@ async function loadBot(
   botId: Doc<"bots">["_id"],
 ): Promise<Doc<"bots">> {
   const identity = await ctx.auth.getUserIdentity();
-  if (!identity) {
+  if (!identity?.email) {
     throw new ConvexError({
       code: "UNAUTHENTICATED",
       message: "Войдите в аккаунт",
     });
   }
-  const bot = await ctx.runQuery(internal.bots.bots.getForOwner, {
+  const bot = await ctx.runQuery(internal.bots.bots.getForUser, {
     botId,
-    ownerToken: identity.tokenIdentifier,
+    email: identity.email,
   });
   if (!bot) {
     throw new ConvexError({ code: "NOT_FOUND", message: "Бот не найден" });

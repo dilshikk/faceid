@@ -5,6 +5,8 @@ import AppHeader from "./components/app-header.tsx";
 import { Skeleton } from "./components/ui/skeleton.tsx";
 import { SignInButton } from "./components/ui/signin.tsx";
 import AuthCallback from "./pages/auth/Callback.tsx";
+import AccessGate from "./components/access-gate.tsx";
+import AccessSettingsPage from "./pages/access/page.tsx";
 import BotDetailPage from "./pages/bots/detail.tsx";
 import BotsPage from "./pages/bots/page.tsx";
 import Index from "./pages/Index.tsx";
@@ -23,7 +25,9 @@ function Protected({ children }: { children: React.ReactNode }) {
           <SignInButton signInText="Войти" />
         </div>
       </Unauthenticated>
-      <Authenticated>{children}</Authenticated>
+      <Authenticated>
+        <AccessGate>{children}</AccessGate>
+      </Authenticated>
     </>
   );
 }
@@ -37,6 +41,7 @@ export default function App() {
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/bots" element={<Protected><BotsPage /></Protected>} />
           <Route path="/bots/:botId" element={<Protected><BotDetailPage /></Protected>} />
+          <Route path="/access" element={<Protected><AccessSettingsPage /></Protected>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

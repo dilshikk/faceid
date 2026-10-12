@@ -15,7 +15,7 @@ import StatusBadge from "./_components/status-badge.tsx";
 export default function BotDetailPage() {
   const { botId } = useParams();
   const bot = useQuery(api.bots.bots.get, botId ? { botId } : "skip");
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState("users");
 
   return (
     <div className="min-h-screen bg-background">
@@ -42,8 +42,8 @@ export default function BotDetailPage() {
             </div>
             <Tabs value={tab} onValueChange={setTab}>
               <TabsList className="h-auto flex-wrap">
-                <TabsTrigger value="overview">Обзор</TabsTrigger>
                 <TabsTrigger value="users">Пользователи</TabsTrigger>
+                <TabsTrigger value="overview">Обзор</TabsTrigger>
                 <TabsTrigger value="logs">Журнал</TabsTrigger>
                 <TabsTrigger value="errors">Ошибки</TabsTrigger>
                 <TabsTrigger value="settings">Настройки</TabsTrigger>

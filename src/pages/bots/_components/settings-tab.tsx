@@ -31,7 +31,10 @@ import { Switch } from "@/components/ui/switch.tsx";
 import { errorText, useBotTables } from "../_hooks/use-bot-data.ts";
 
 type Props = {
-  bot: Omit<Doc<"bots">, "connectionString"> & { host: string };
+  bot: Omit<Doc<"bots">, "connectionString" | "botToken"> & {
+    host: string;
+    hasToken: boolean;
+  };
 };
 
 const NONE = "none";
@@ -71,7 +74,12 @@ export default function SettingsTab({ bot }: Props) {
   const tables = useBotTables(bot._id, true);
 
   const [name, setName] = useState(bot.name);
-  const [url, setUrl] = useState("");
+  const [token, setToken] = useState("");
+  const [dbHost, setDbHost] = useState(bot.dbHost ?? "");
+  const [dbPort, setDbPort] = useState(String(bot.dbPort ?? 5432));
+  const [dbName, setDbName] = useState(bot.dbName ?? "");
+  const [dbUser, setDbUser] = useState(bot.dbUser ?? "");
+  const [password, setPassword] = useState("");
   const [ssl, setSsl] = useState(bot.ssl);
   const [usersTable, setUsersTable] = useState(bot.usersTable ?? NONE);
   const [logsTable, setLogsTable] = useState(bot.logsTable ?? NONE);
@@ -91,12 +99,18 @@ export default function SettingsTab({ bot }: Props) {
         botId: bot._id,
         name,
         ssl,
-        connectionString: url || undefined,
+        botToken: token || undefined,
+        dbHost,
+        dbPort: Number(dbPort),
+        dbName,
+        dbUser,
+        dbPassword: password || undefined,
         usersTable: toValue(usersTable),
         logsTable: toValue(logsTable),
         errorsTable: toValue(errorsTable),
       });
-      setUrl("");
+      setToken("");
+      setPassword("");
       toast.success("Настройки сохранены");
     } catch (error) {
       toast.error(errorText(error));
@@ -123,15 +137,46 @@ export default function SettingsTab({ bot }: Props) {
             <Input id="s-name" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="s-url">Новый адрес базы данных</Label>
+            <Label htmlFor="s-token">Токен бота</Label>
             <Input
-              id="s-url"
+              id="s-token"
               type="password"
               autoComplete="off"
-              placeholder={`Сейчас: ${bot.host}. Оставьте пустым, чтобы не менять`}
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
+              placeholder={bot.hasToken ? "Сохранён. Оставьте пустым, чтобы не менять" : "Не задан"}
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
             />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-2 space-y-2">
+              <Label htmlFor="s-host">Хост</Label>
+              <Input id="s-host" value={dbHost} onChange={(e) => setDbHost(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="s-port">Порт</Label>
+              <Input id="s-port" type="number" value={dbPort} onChange={(e) => setDbPort(e.target.value)} />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="s-db">База данных</Label>
+            <Input id="s-db" value={dbName} onChange={(e) => setDbName(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="s-user">Логин</Label>
+              <Input id="s-user" value={dbUser} onChange={(e) => setDbUser(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="s-pass">Пароль</Label>
+              <Input
+                id="s-pass"
+                type="password"
+                autoComplete="off"
+                placeholder="Оставьте пустым, чтобы не менять"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
           </div>
           <div className="flex items-center justify-between rounded-lg border p-3">
             <Label htmlFor="s-ssl">Защищённое соединение (SSL)</Label>

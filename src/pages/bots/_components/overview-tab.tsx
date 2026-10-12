@@ -13,7 +13,10 @@ import { useBotStats } from "../_hooks/use-bot-data.ts";
 import StatusBadge from "./status-badge.tsx";
 
 type Props = {
-  bot: Omit<Doc<"bots">, "connectionString"> & { host: string };
+  bot: Omit<Doc<"bots">, "connectionString" | "botToken"> & {
+    host: string;
+    hasToken: boolean;
+  };
   onOpenSettings: () => void;
 };
 
