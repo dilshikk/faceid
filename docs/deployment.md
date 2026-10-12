@@ -45,9 +45,12 @@ sudo mkdir -p /opt/bot-control-center
 sudo cp -r backend /opt/bot-control-center/backend
 cd /opt/bot-control-center/backend
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install .
 .venv/bin/alembic upgrade head
 ```
+
+Зависимости и версия пакета описаны в `backend/pyproject.toml` —
+отдельного файла `requirements.txt` больше нет.
 
 ## Шаг 4. Создать первого администратора
 
@@ -83,10 +86,10 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ## Шаг 7. Добавить сервисы в реестр
 
-Вставьте строки в `monitored_services` для `mado-bot.service`,
-`invitebot.service`, `bkbot.service`, `tgbot.service` (или через будущий
-UI-экран управления сервисами, который не входит в MVP — используйте SQL
-напрямую на этом этапе).
+С этой версии в веб-панели (`/services`) и в Telegram-боте (команда
+`/addservice`) есть форма регистрации сервиса — отдельный SQL уже не
+обязателен. Зарегистрируйте `mado-bot.service`, `invitebot.service`,
+`bkbot.service`, `tgbot.service` через любой из этих интерфейсов.
 
 ## Шаг 8. Проверка
 
