@@ -7,20 +7,29 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.v1 import auth, dashboard, health, incidents, metrics, notifications, services
+from app.api.v1 import (
+    auth,
+    bot_users,
+    dashboard,
+    health,
+    incidents,
+    metrics,
+    notifications,
+    services,
+)
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 
 configure_logging()
 settings = get_settings()
 
-app = FastAPI(title="Bot Control Center API", version="1.0.0")
+app = FastAPI(title="Bot Control Center API", version="1.2.0")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH"],
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -28,6 +37,7 @@ app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(dashboard.router, prefix="/api/v1")
 app.include_router(services.router, prefix="/api/v1")
+app.include_router(bot_users.router, prefix="/api/v1")
 app.include_router(incidents.router, prefix="/api/v1")
 app.include_router(metrics.router, prefix="/api/v1")
 app.include_router(notifications.router, prefix="/api/v1")

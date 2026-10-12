@@ -1,6 +1,9 @@
 // Thin REST client for the BCC FastAPI backend. Cookies carry the session,
 // so every request uses credentials: "include".
 import type {
+  BotDatabase,
+  BotDatabaseInput,
+  BotUsersPage,
   DashboardSummary,
   Incident,
   LogEvent,
@@ -75,6 +78,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export type LogFilters = { since?: string; q?: string; level?: LogLevel };
 
+export type BotUsersQuery = { table?: string; q?: string; limit?: number; offset?: number };
+
 export const api = {
   live: () => request<{ status: string }>("/health/live"),
   ready: () => request<{ status: string }>("/health/ready"),
@@ -108,6 +113,23 @@ export const api = {
     if (filters?.q) params.set("q", filters.q);
     if (filters?.level) params.set("level", filters.level);
     return request<LogEvent[]>(`/services/${id}/logs?${params.toString()}`);
+  },
+  getBotDatabase: (id: string) => request<BotDatabase>(`/services/${id}/database`),
+  saveBotDatabase: (id: string, payload: BotDatabaseInput) =>
+    request<BotDatabase>(`/services/${id}/database`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  deleteBotDatabase: (id: string) =>
+    request<void>(`/services/${id}/database`, { method: "DELETE" }),
+  botTables: (id: string) => request<{ tables: string[] }>(`/services/${id}/database/tables`),
+  botUsers: (id: string, query: BotUsersQuery) => {
+    const params = new URLSearchParams();
+    if (query.table) params.set("table", query.table);
+    if (query.q) params.set("q", query.q);
+    params.set("limit", String(query.limit ?? 50));
+    params.set("offset", String(query.offset ?? 0));
+    return request<BotUsersPage>(`/services/${id}/bot-users?${params.toString()}`);
   },
   listIncidents: (status?: string, cursor?: string, limit = 50) =>
     request<Page<Incident>>(

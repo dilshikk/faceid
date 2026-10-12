@@ -8,6 +8,7 @@ import ServiceDetails from "../pages/ServiceDetails.tsx";
 import Logs from "../pages/Logs.tsx";
 import Incidents from "../pages/Incidents.tsx";
 import Settings from "../pages/Settings.tsx";
+import BotUsers from "../pages/BotUsers.tsx";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -15,71 +16,32 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+const PROTECTED_ROUTES = [
+  { path: "/", element: <Dashboard /> },
+  { path: "/services", element: <Services /> },
+  { path: "/services/:id", element: <ServiceDetails /> },
+  { path: "/services/:id/logs", element: <Logs /> },
+  { path: "/bot-users", element: <BotUsers /> },
+  { path: "/incidents", element: <Incidents /> },
+  { path: "/settings", element: <Settings /> },
+];
+
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route
-          path="/"
-          element={
-            <RequireAuth>
-              <Layout>
-                <Dashboard />
-              </Layout>
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/services"
-          element={
-            <RequireAuth>
-              <Layout>
-                <Services />
-              </Layout>
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/services/:id"
-          element={
-            <RequireAuth>
-              <Layout>
-                <ServiceDetails />
-              </Layout>
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/services/:id/logs"
-          element={
-            <RequireAuth>
-              <Layout>
-                <Logs />
-              </Layout>
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/incidents"
-          element={
-            <RequireAuth>
-              <Layout>
-                <Incidents />
-              </Layout>
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/settings"
-          element={
-            <RequireAuth>
-              <Layout>
-                <Settings />
-              </Layout>
-            </RequireAuth>
-          }
-        />
+        {PROTECTED_ROUTES.map((route) => (
+          <Route
+            key={route.path}
+            path={route.path}
+            element={
+              <RequireAuth>
+                <Layout>{route.element}</Layout>
+              </RequireAuth>
+            }
+          />
+        ))}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

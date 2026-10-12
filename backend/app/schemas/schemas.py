@@ -102,6 +102,41 @@ class NotificationSettingUpdate(BaseModel):
     silence_minutes: int | None = None
 
 
+class BotDatabaseIn(BaseModel):
+    host: str = Field(default="127.0.0.1", min_length=1, max_length=255)
+    port: int = Field(default=5432, ge=1, le=65535)
+    dbname: str = Field(min_length=1, max_length=120)
+    user: str = Field(min_length=1, max_length=120)
+    # Omit/empty to keep the previously saved password.
+    password: str | None = Field(default=None, max_length=256)
+    users_table: str | None = Field(default=None, max_length=200)
+
+
+class BotDatabaseOut(BaseModel):
+    """Connection settings without the password (only has_password)."""
+
+    configured: bool
+    host: str | None = None
+    port: int | None = None
+    dbname: str | None = None
+    user: str | None = None
+    has_password: bool = False
+    users_table: str | None = None
+
+
+class BotTablesOut(BaseModel):
+    tables: list[str]
+
+
+class BotUsersOut(BaseModel):
+    table: str
+    columns: list[str]
+    rows: list[list[str | int | float | bool | None]]
+    total: int
+    limit: int
+    offset: int
+
+
 class ErrorResponse(BaseModel):
     request_id: str
     message: str

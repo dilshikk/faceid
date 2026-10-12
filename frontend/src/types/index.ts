@@ -72,3 +72,34 @@ export type Page<T> = {
   items: T[];
   next_cursor: string | null;
 };
+
+// Connection to a bot's own database. The password is never returned.
+export type BotDatabase = {
+  configured: boolean;
+  host: string | null;
+  port: number | null;
+  dbname: string | null;
+  user: string | null;
+  has_password: boolean;
+  users_table: string | null;
+};
+
+export type BotDatabaseInput = {
+  host: string;
+  port: number;
+  dbname: string;
+  user: string;
+  password?: string;
+  users_table?: string | null;
+};
+
+export type BotCell = string | number | boolean | null;
+
+export type BotUsersPage = {
+  table: string;
+  columns: string[];
+  rows: BotCell[][];
+  total: number;
+  limit: number;
+  offset: number;
+};

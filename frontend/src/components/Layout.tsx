@@ -4,6 +4,7 @@ import { useAuth } from "../hooks/useApi.ts";
 const LINKS = [
   { to: "/", label: "Дашборд" },
   { to: "/services", label: "Службы" },
+  { to: "/bot-users", label: "Пользователи" },
   { to: "/incidents", label: "Инциденты" },
   { to: "/settings", label: "Настройки" },
 ];
@@ -14,9 +15,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="border-b border-slate-800 px-6 py-3 flex items-center justify-between">
+      <header className="border-b border-slate-800 px-6 py-3 flex flex-wrap gap-2 items-center justify-between">
         <span className="font-semibold text-lg">Bot Control Center</span>
-        <nav className="flex gap-4 text-sm">
+        <nav className="flex flex-wrap gap-4 text-sm">
           {LINKS.map((link) => (
             <Link
               key={link.to}

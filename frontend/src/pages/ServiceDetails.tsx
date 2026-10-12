@@ -52,12 +52,20 @@ export default function ServiceDetails() {
         ))}
       </dl>
 
-      <Link
-        to={`/services/${id}/logs`}
-        className="inline-block text-sm rounded bg-slate-800 px-4 py-2 hover:bg-slate-700"
-      >
-        Посмотреть логи
-      </Link>
+      <div className="flex flex-wrap gap-2">
+        <Link
+          to={`/services/${id}/logs`}
+          className="inline-block text-sm rounded bg-slate-800 px-4 py-2 hover:bg-slate-700"
+        >
+          Посмотреть логи
+        </Link>
+        <Link
+          to={`/bot-users?service=${id}`}
+          className="inline-block text-sm rounded bg-slate-800 px-4 py-2 hover:bg-slate-700"
+        >
+          Пользователи бота
+        </Link>
+      </div>
 
       <section>
         <h2 className="font-semibold mb-2">История статусов</h2>
