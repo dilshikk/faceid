@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.t
 import BroadcastTab from "./_components/broadcast-tab.tsx";
 import DataTable from "./_components/data-table.tsx";
 import OverviewTab from "./_components/overview-tab.tsx";
+import MonitorTab from "./_components/monitor-tab.tsx";
 import SettingsTab from "./_components/settings-tab.tsx";
 import StatusBadge from "./_components/status-badge.tsx";
 
@@ -45,6 +46,7 @@ export default function BotDetailPage() {
               <TabsList className="h-auto flex-wrap">
                 <TabsTrigger value="users">Пользователи</TabsTrigger>
                 <TabsTrigger value="overview">Обзор</TabsTrigger>
+                <TabsTrigger value="monitor">Мониторинг</TabsTrigger>
                 <TabsTrigger value="logs">Журнал</TabsTrigger>
                 <TabsTrigger value="errors">Ошибки</TabsTrigger>
                 <TabsTrigger value="broadcast">Рассылка</TabsTrigger>
@@ -52,6 +54,9 @@ export default function BotDetailPage() {
               </TabsList>
               <TabsContent value="overview" className="pt-4">
                 <OverviewTab bot={bot} onOpenSettings={() => setTab("settings")} />
+              </TabsContent>
+              <TabsContent value="monitor" className="pt-4">
+                <MonitorTab bot={bot} />
               </TabsContent>
               <TabsContent value="users" className="pt-4">
                 <DataTable botId={bot._id as Id<"bots">} kind="users" tableName={bot.usersTable} noun="пользователей" onOpenSettings={() => setTab("settings")} />

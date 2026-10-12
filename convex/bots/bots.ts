@@ -149,6 +149,7 @@ export const update = mutation({
     logsTable: v.optional(v.union(v.string(), v.null())),
     errorsTable: v.optional(v.union(v.string(), v.null())),
     chatIdColumn: v.optional(v.union(v.string(), v.null())),
+    alertChatId: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx, args) => {
     await requireAllowed(ctx, true);
@@ -201,6 +202,18 @@ export const update = mutation({
     if (args.chatIdColumn !== undefined) {
       patch.chatIdColumn = args.chatIdColumn ?? undefined;
     }
+    if (args.alertChatId !== undefined) {
+      const chatId = args.alertChatId?.trim() ?? "";
+      if (chatId && !/^-?\d+$/.test(chatId)) {
+        throw new ConvexError({
+          code: "BAD_REQUEST",
+          message: "Telegram ID состоит только из цифр",
+        });
+      }
+      patch.alertChatId = chatId || undefined;
+      // A new recipient should get the current state again.
+      patch.alertState = undefined;
+    }
     await ctx.db.patch("bots", args.botId, patch);
     return null;
   },
@@ -215,6 +228,11 @@ export const remove = mutation({
       throw new ConvexError({ code: "NOT_FOUND", message: "Бот не найден" });
     }
     await ctx.db.delete("bots", args.botId);
+    const agent = await ctx.db
+      .query("agents")
+      .withIndex("by_bot", (q) => q.eq("botId", args.botId))
+      .first();
+    if (agent) await ctx.db.delete("agents", agent._id);
     return null;
   },
 });
