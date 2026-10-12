@@ -39,6 +39,7 @@ function AddServiceForm({ onCreated }: { onCreated: () => void }) {
           placeholder="Mado Bot"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          maxLength={120}
           required
         />
       </div>
@@ -49,6 +50,7 @@ function AddServiceForm({ onCreated }: { onCreated: () => void }) {
           placeholder="mado-bot.service"
           value={unitName}
           onChange={(e) => setUnitName(e.target.value)}
+          maxLength={120}
           required
         />
       </div>
@@ -66,7 +68,7 @@ function AddServiceForm({ onCreated }: { onCreated: () => void }) {
 
 export default function Services() {
   const { role } = useAuth();
-  const { items, nextCursor, loading, error, loadMore } = usePaginatedPolling<Service>(
+  const { items, nextCursor, loading, error, loadMore, refresh } = usePaginatedPolling<Service>(
     (cursor) => api.listServices(cursor),
     15000,
   );
@@ -74,7 +76,8 @@ export default function Services() {
 
   return (
     <div className="space-y-4">
-      {canManage && <AddServiceForm onCreated={() => window.location.reload()} />}
+      {/* refresh() re-fetches the list; a full page reload would also drop auth/UI state */}
+      {canManage && <AddServiceForm onCreated={refresh} />}
 
       {loading && <p className="text-slate-400">Загрузка...</p>}
       {error && <p className="text-red-400">{error}</p>}

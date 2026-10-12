@@ -5,10 +5,12 @@ import StatusBadge from "../components/StatusBadge.tsx";
 
 // Service overview and status history. Full log tailing lives on its own
 // route (Logs.tsx) so a long log stream doesn't make this page heavy.
+// The route id is a polling dependency so navigating between services
+// re-fetches instead of showing the previous service.
 export default function ServiceDetails() {
   const { id } = useParams<{ id: string }>();
-  const service = usePolling(() => api.getService(id!), 15000);
-  const history = usePolling(() => api.serviceHistory(id!, 50), 30000);
+  const service = usePolling(() => api.getService(id!), 15000, [id]);
+  const history = usePolling(() => api.serviceHistory(id!, 50), 30000, [id]);
 
   if (service.loading) return <p className="text-slate-400">Загрузка...</p>;
   if (service.error) return <p className="text-red-400">{service.error}</p>;
