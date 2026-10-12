@@ -7,6 +7,7 @@ import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import AppHeader from "@/components/app-header.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
+import BroadcastTab from "./_components/broadcast-tab.tsx";
 import DataTable from "./_components/data-table.tsx";
 import OverviewTab from "./_components/overview-tab.tsx";
 import SettingsTab from "./_components/settings-tab.tsx";
@@ -46,6 +47,7 @@ export default function BotDetailPage() {
                 <TabsTrigger value="overview">Обзор</TabsTrigger>
                 <TabsTrigger value="logs">Журнал</TabsTrigger>
                 <TabsTrigger value="errors">Ошибки</TabsTrigger>
+                <TabsTrigger value="broadcast">Рассылка</TabsTrigger>
                 <TabsTrigger value="settings">Настройки</TabsTrigger>
               </TabsList>
               <TabsContent value="overview" className="pt-4">
@@ -59,6 +61,9 @@ export default function BotDetailPage() {
               </TabsContent>
               <TabsContent value="errors" className="pt-4">
                 <DataTable botId={bot._id as Id<"bots">} kind="errors" tableName={bot.errorsTable} noun="ошибки" onOpenSettings={() => setTab("settings")} />
+              </TabsContent>
+              <TabsContent value="broadcast" className="pt-4">
+                <BroadcastTab bot={bot} onOpenSettings={() => setTab("settings")} />
               </TabsContent>
               <TabsContent value="settings" className="pt-4">
                 <SettingsTab key={bot._id} bot={bot} />

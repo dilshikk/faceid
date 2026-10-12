@@ -34,6 +34,8 @@ export default defineSchema({
     usersTable: v.optional(v.string()),
     logsTable: v.optional(v.string()),
     errorsTable: v.optional(v.string()),
+    // Column in the users table that holds the Telegram chat id (for broadcasts).
+    chatIdColumn: v.optional(v.string()),
     // Result of the last health check.
     status: v.optional(v.union(v.literal("online"), v.literal("offline"))),
     lastCheckedAt: v.optional(v.string()),
