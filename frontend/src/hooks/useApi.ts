@@ -5,12 +5,7 @@ const LOAD_ERROR = "Не удалось загрузить данные";
 
 // Simple polling hook: the API has no websocket layer, so pages refresh on
 // an interval instead. 15s matches the default monitor interval.
-//
-// `deps` lists the values the fetcher depends on (route id, filters). When
-// any of them changes, the data is re-fetched immediately. The fetcher itself
-// is read through a ref so polling always uses the latest closure; previously
-// the first closure was captured forever, so filters never took effect.
-// `refresh` forces an immediate re-fetch (e.g. after a mutation).
+// `deps` lists values the fetcher depends on (route id, filters).
 export function usePolling<T>(
   fetcher: () => Promise<T>,
   intervalMs = 15000,
@@ -59,10 +54,7 @@ export function usePolling<T>(
   return { data, error, loading, refresh };
 }
 
-// Polling + "load more" for cursor-paginated list endpoints. Polling only
-// re-fetches the first page (freshest data); additional pages loaded via
-// loadMore are appended and kept until the next first-page refresh.
-// See usePolling for the meaning of `deps` and `refresh`.
+// Polling + "load more" for cursor-paginated list endpoints.
 export function usePaginatedPolling<T>(
   fetchPage: (cursor?: string) => Promise<{ items: T[]; next_cursor: string | null }>,
   intervalMs = 15000,
@@ -127,9 +119,6 @@ export function usePaginatedPolling<T>(
 export function useAuth() {
   const [role, setRole] = useState<string | null>(() => sessionStorage.getItem("bcc_role"));
 
-  // Previously a stale sessionStorage "role" could stay truthy after the
-  // server-side session expired, so the app looked logged in while every
-  // request 401'd. Clear it as soon as any request reports 401.
   useEffect(() => {
     const onExpired = () => {
       sessionStorage.removeItem("bcc_role");
@@ -139,8 +128,8 @@ export function useAuth() {
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
   }, []);
 
-  const login = async (username: string, password: string) => {
-    const res = await api.login(username, password);
+  const login = async (username: string, password: string, otp?: string) => {
+    const res = await api.login(username, password, otp);
     sessionStorage.setItem("bcc_role", res.role);
     setRole(res.role);
   };

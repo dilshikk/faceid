@@ -2,7 +2,7 @@
 import datetime as dt
 from typing import Generic, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 T = TypeVar("T")
 
@@ -15,8 +15,10 @@ class PageOut(BaseModel, Generic[T]):
 
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(max_length=60)
+    password: str = Field(max_length=256)
+    # 6-digit TOTP code; required for accounts with 2FA enabled.
+    otp: str | None = Field(default=None, max_length=10)
 
 
 class ServiceOut(BaseModel):
@@ -28,6 +30,9 @@ class ServiceOut(BaseModel):
     status: str
     pid: int | None = None
     last_transition_at: dt.datetime | None = None
+    started_at: dt.datetime | None = None
+    uptime_seconds: int | None = None
+    restarts: int | None = None
 
 
 class ServiceCreate(BaseModel):
@@ -94,8 +99,6 @@ class NotificationSettingOut(BaseModel):
 class NotificationSettingUpdate(BaseModel):
     cooldown_seconds: int | None = None
     enabled: bool | None = None
-    # Minutes from now to silence this event type; 0 (or omitted as None
-    # vs explicit 0) clears an existing silence.
     silence_minutes: int | None = None
 
 

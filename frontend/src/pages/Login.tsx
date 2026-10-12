@@ -6,6 +6,7 @@ import { ApiError } from "../api/client.ts";
 export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const { login } = useAuth();
@@ -16,7 +17,7 @@ export default function Login() {
     setSubmitting(true);
     setError(null);
     try {
-      await login(username, password);
+      await login(username, password, otp);
       navigate("/");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Не удалось войти");
@@ -43,6 +44,14 @@ export default function Login() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="current-password"
+        />
+        <input
+          className="w-full rounded bg-slate-800 px-3 py-2 text-sm tracking-widest"
+          placeholder="код 2FA (6 цифр)"
+          value={otp}
+          onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+          inputMode="numeric"
+          autoComplete="one-time-code"
         />
         {error && <p className="text-sm text-red-400">{error}</p>}
         <button

@@ -9,6 +9,9 @@ export type Service = {
   status: ServiceStatusValue;
   pid: number | null;
   last_transition_at: string | null;
+  started_at: string | null;
+  uptime_seconds: number | null;
+  restarts: number | null;
 };
 
 export type ServiceHistoryEntry = {
@@ -17,8 +20,10 @@ export type ServiceHistoryEntry = {
   observed_at: string;
 };
 
+export type LogLevel = "error" | "warning" | "info";
+
 export type LogEvent = {
-  level: string;
+  level: LogLevel;
   message: string;
   event_time: string;
 };

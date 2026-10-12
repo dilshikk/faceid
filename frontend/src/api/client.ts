@@ -1,13 +1,21 @@
 // Thin REST client for the BCC FastAPI backend. Cookies carry the session,
 // so every request uses credentials: "include".
-import type { Page } from "../types/index.ts";
+import type {
+  DashboardSummary,
+  Incident,
+  LogEvent,
+  LogLevel,
+  NotificationSetting,
+  Page,
+  ServerMetric,
+  Service,
+  ServiceHistoryEntry,
+} from "../types/index.ts";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
 
 // Fired whenever a request comes back 401, so the auth hook can clear
-// client-side state and the router can redirect to /login. Previously a
-// stale sessionStorage "role" could outlive an expired server session with
-// no way for the UI to notice.
+// client-side state and the router can redirect to /login.
 export const AUTH_EXPIRED_EVENT = "bcc:auth-expired";
 
 export class ApiError extends Error {
@@ -21,8 +29,6 @@ export class ApiError extends Error {
 }
 
 type ErrorBody = {
-  // FastAPI's HTTPException uses `detail` (string); validation errors (422)
-  // send a list of objects. The custom handler may use `message`.
   detail?: string | { msg?: string }[];
   message?: string;
   request_id?: string;
@@ -43,7 +49,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
   });
 
-  if (res.status === 401) {
+  // A failed login is also a 401 but must not be treated as "session expired".
+  if (res.status === 401 && path !== "/auth/login") {
     window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
   }
 
@@ -66,56 +73,56 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+export type LogFilters = { since?: string; q?: string; level?: LogLevel };
+
 export const api = {
   live: () => request<{ status: string }>("/health/live"),
   ready: () => request<{ status: string }>("/health/ready"),
-  login: (username: string, password: string) =>
+  login: (username: string, password: string, otp?: string) =>
     request<{ ok: boolean; role: string }>("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, otp: otp || null }),
     }),
   logout: () => request<{ ok: boolean }>("/auth/logout", { method: "POST" }),
-  dashboardSummary: () => request<import("../types").DashboardSummary>("/dashboard/summary"),
+  dashboardSummary: () => request<DashboardSummary>("/dashboard/summary"),
   listServices: (cursor?: string, limit = 50) =>
-    request<Page<import("../types").Service>>(
+    request<Page<Service>>(
       `/services?limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
     ),
   createService: (payload: { name: string; unit_name: string; interval_seconds?: number }) =>
-    request<import("../types").Service>("/services", {
+    request<Service>("/services", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
   updateService: (id: string, patch: { name?: string; enabled?: boolean; interval_seconds?: number }) =>
-    request<import("../types").Service>(`/services/${id}`, {
+    request<Service>(`/services/${id}`, {
       method: "PATCH",
       body: JSON.stringify(patch),
     }),
-  getService: (id: string) => request<import("../types").Service>(`/services/${id}`),
+  getService: (id: string) => request<Service>(`/services/${id}`),
   serviceHistory: (id: string, limit = 100) =>
-    request<import("../types").ServiceHistoryEntry[]>(`/services/${id}/history?limit=${limit}`),
-  // `since` is an ISO 8601 UTC timestamp string; `q` is a case-insensitive
-  // substring filter applied by the backend against each log message.
-  serviceLogs: (id: string, limit = 100, filters?: { since?: string; q?: string }) => {
+    request<ServiceHistoryEntry[]>(`/services/${id}/history?limit=${limit}`),
+  serviceLogs: (id: string, limit = 100, filters?: LogFilters) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (filters?.since) params.set("since", filters.since);
     if (filters?.q) params.set("q", filters.q);
-    return request<import("../types").LogEvent[]>(`/services/${id}/logs?${params.toString()}`);
+    if (filters?.level) params.set("level", filters.level);
+    return request<LogEvent[]>(`/services/${id}/logs?${params.toString()}`);
   },
   listIncidents: (status?: string, cursor?: string, limit = 50) =>
-    request<Page<import("../types").Incident>>(
+    request<Page<Incident>>(
       `/incidents?limit=${limit}${status ? `&status=${status}` : ""}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
     ),
-  getIncident: (id: string) => request<import("../types").Incident>(`/incidents/${id}`),
+  getIncident: (id: string) => request<Incident>(`/incidents/${id}`),
   acknowledgeIncident: (id: string) =>
-    request<import("../types").Incident>(`/incidents/${id}/acknowledge`, { method: "POST" }),
-  serverMetrics: () => request<import("../types").ServerMetric>("/metrics/server"),
-  notificationSettings: () =>
-    request<import("../types").NotificationSetting[]>("/notifications/settings"),
+    request<Incident>(`/incidents/${id}/acknowledge`, { method: "POST" }),
+  serverMetrics: () => request<ServerMetric>("/metrics/server"),
+  notificationSettings: () => request<NotificationSetting[]>("/notifications/settings"),
   updateNotificationSetting: (
     id: string,
     patch: { cooldown_seconds?: number; enabled?: boolean; silence_minutes?: number },
   ) =>
-    request<import("../types").NotificationSetting>(`/notifications/settings/${id}`, {
+    request<NotificationSetting>(`/notifications/settings/${id}`, {
       method: "PATCH",
       body: JSON.stringify(patch),
     }),

@@ -93,6 +93,7 @@ class ServiceStatusHistory(Base):
     status: Mapped[ServiceStatus] = mapped_column(_str_enum(ServiceStatus))
     pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
     observed_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    # {"started_at": ISO-8601 UTC | null, "restarts": int | null}
     details_json: Mapped[dict] = mapped_column(JSON, default=dict)
 
     service: Mapped[MonitoredService] = relationship(back_populates="status_history")
@@ -136,6 +137,8 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(_str_enum(UserRole), default=UserRole.viewer)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # TOTP secret for 2FA (TZ 7.1). Never returned by any API endpoint.
+    totp_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
@@ -168,9 +171,6 @@ class NotificationSetting(Base):
     recipient: Mapped[str] = mapped_column(String(120))
     cooldown_seconds: Mapped[int] = mapped_column(Integer, default=900)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    # When set and in the future, notifications for this event_type are
-    # suppressed (TZ 5/8 "silence"). Set via PATCH .../settings/{id} or the
-    # Telegram /silence command.
     silence_until: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

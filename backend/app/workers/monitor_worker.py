@@ -34,13 +34,11 @@ from app.services.systemd_monitor import read_unit_status
 
 logger = logging.getLogger("bcc.worker")
 
-# Lower bound for any per-service interval, so a misconfigured 0/1 second
-# interval cannot turn the worker into a busy loop.
 MIN_INTERVAL_SECONDS = 5
 TICK_SECONDS = MIN_INTERVAL_SECONDS
 
 _consecutive_failures: dict[str, int] = {}
-_next_check_at: dict[str, float] = {}  # service_id -> time.monotonic() deadline
+_next_check_at: dict[str, float] = {}
 _next_system_check_at: float = 0.0
 _last_cleanup: dt.datetime | None = None
 
@@ -52,7 +50,14 @@ def _service_interval(service: MonitoredService, default: int) -> int:
 async def check_service(db: Session, service: MonitoredService) -> None:
     settings = get_settings()
     status = await read_unit_status(service.unit_name)
-    db.add(ServiceStatusHistory(service_id=service.id, status=status.state, pid=status.pid))
+    db.add(
+        ServiceStatusHistory(
+            service_id=service.id,
+            status=status.state,
+            pid=status.pid,
+            details_json=status.details(),
+        )
+    )
     db.commit()
 
     if status.state in FAILURE_STATES:
@@ -71,7 +76,6 @@ async def check_service(db: Session, service: MonitoredService) -> None:
             await notify_admins(db, admin_ids, format_incident_message(service, incident), incident.id)
     elif (
         incident is not None
-        # Acknowledged incidents are being handled; do not nag.
         and incident.status == IncidentStatus.open
         and is_notification_allowed(db, "incident_open")
         and is_reminder_due(db, incident)
@@ -118,14 +122,12 @@ async def maybe_record_system_health(db: Session) -> None:
     )
     db.commit()
 
-    # Persist dependency health history (TZ 6).
     record_health_check(db, "postgres", check_postgres(db))
     record_health_check(db, "telegram", await check_telegram())
     db.commit()
 
 
 async def maybe_run_cleanup(db: Session) -> None:
-    """Run retention cleanup at most once a day (TZ acceptance criterion #12)."""
     global _last_cleanup
     now = dt.datetime.now(dt.timezone.utc)
     if _last_cleanup is not None and now - _last_cleanup < dt.timedelta(days=1):
