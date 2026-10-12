@@ -2,23 +2,26 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.rate_limit import mutation_rate_limiter
 from app.core.security import get_current_user, require_role
 from app.db import get_db
 from app.models.models import AuditLog, Incident, IncidentStatus, User
 from app.repositories.repositories import list_incidents
-from app.schemas.schemas import IncidentOut
+from app.schemas.schemas import IncidentOut, PageOut
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
 
 
-@router.get("", response_model=list[IncidentOut])
+@router.get("", response_model=PageOut[IncidentOut])
 def list_all(
     status_filter: str | None = Query(default=None, alias="status"),
+    limit: int = Query(default=50, le=200),
+    cursor: str | None = Query(default=None),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    rows = list_incidents(db, status_filter)
-    return [
+    rows, next_cursor = list_incidents(db, status_filter, limit=limit, cursor=cursor)
+    items = [
         IncidentOut(
             id=i.id,
             service_id=i.service_id,
@@ -30,9 +33,14 @@ def list_all(
         )
         for i in rows
     ]
+    return PageOut(items=items, next_cursor=next_cursor)
 
 
-@router.post("/{incident_id}/acknowledge", response_model=IncidentOut)
+@router.post(
+    "/{incident_id}/acknowledge",
+    response_model=IncidentOut,
+    dependencies=[Depends(mutation_rate_limiter)],
+)
 def acknowledge(
     incident_id: str,
     db: Session = Depends(get_db),
