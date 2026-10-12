@@ -26,12 +26,22 @@ class SystemdStatus:
 
 
 def _map_state(active_state: str, sub_state: str) -> ServiceStatus:
-    if active_state == "active":
-        return ServiceStatus.active
-    if active_state == "activating":
-        return ServiceStatus.activating
     if active_state == "failed" or sub_state == "failed":
         return ServiceStatus.failed
+    if active_state in ("active", "reloading"):
+        # reloading = the process is running and re-reading its config.
+        return ServiceStatus.active
+    if active_state == "activating":
+        # Restart=on-failure crash loop: systemd keeps the unit in
+        # activating/auto-restart between attempts. Treat it as a failure,
+        # otherwise a bot that crashes every few seconds never alerts.
+        if sub_state == "auto-restart":
+            return ServiceStatus.failed
+        return ServiceStatus.activating
+    if active_state == "deactivating":
+        # Transitional state during stop/restart. Previously mapped to
+        # unknown (= failure), which produced false alerts on every restart.
+        return ServiceStatus.activating
     if active_state == "inactive":
         return ServiceStatus.inactive
     return ServiceStatus.unknown

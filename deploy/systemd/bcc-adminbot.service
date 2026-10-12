@@ -6,6 +6,8 @@ After=network.target
 Type=simple
 User=bcc
 Group=bcc
+# /logs reads other services' logs via journalctl; this group is required.
+SupplementaryGroups=systemd-journal
 WorkingDirectory=/opt/bot-control-center/backend
 EnvironmentFile=/etc/bot-control-center/bcc.env
 ExecStart=/opt/bot-control-center/backend/.venv/bin/python -m app.telegram_admin.main

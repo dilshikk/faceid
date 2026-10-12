@@ -17,9 +17,10 @@ async def read_unit_logs(unit_name: str, limit: int = 200, since: str | None = N
 
     args = ["-u", unit_name, "-n", str(limit), "--no-pager", "-o", "short-iso"]
     if since:
-        # journalctl accepts "YYYY-MM-DD HH:MM:SS" (UTC, caller's responsibility
-        # to convert); this narrows the read instead of filtering client-side.
-        args += ["--since", since]
+        # `since` is "YYYY-MM-DD HH:MM:SS" in UTC. journalctl interprets a
+        # bare timestamp in the server's LOCAL timezone, so the explicit
+        # " UTC" suffix is required or the filter shifts by the TZ offset.
+        args += ["--since", f"{since} UTC"]
 
     try:
         proc = await asyncio.create_subprocess_exec(

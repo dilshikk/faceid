@@ -7,6 +7,7 @@ import datetime as dt
 import html
 
 import httpx
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -50,8 +51,25 @@ def format_incident_message(service: MonitoredService, incident: Incident) -> st
     )
 
 
+def format_reminder_message(service: MonitoredService, incident: Incident) -> str:
+    return (
+        f"<b>Напоминание:</b> {html.escape(service.unit_name)} всё ещё недоступен\n"
+        f"<b>Состояние:</b> {html.escape(incident.severity)}\n"
+        f"<b>С:</b> {incident.first_seen.isoformat()}"
+    )
+
+
 def format_recovery_message(service: MonitoredService) -> str:
     return f"<b>Сервис:</b> {html.escape(service.unit_name)}\n<b>Состояние:</b> восстановлен"
+
+
+def _matching_settings(db: Session, event_type: str) -> list[NotificationSetting]:
+    return (
+        db.query(NotificationSetting)
+        .filter(NotificationSetting.channel == "telegram")
+        .filter(NotificationSetting.event_type.in_([event_type, "all"]))
+        .all()
+    )
 
 
 def is_notification_allowed(db: Session, event_type: str) -> bool:
@@ -64,12 +82,7 @@ def is_notification_allowed(db: Session, event_type: str) -> bool:
     If no settings exist yet for telegram at all, default to allowed so
     notifications keep working out of the box (TZ 5/8 default behaviour).
     """
-    rows = (
-        db.query(NotificationSetting)
-        .filter(NotificationSetting.channel == "telegram")
-        .filter(NotificationSetting.event_type.in_([event_type, "all"]))
-        .all()
-    )
+    rows = _matching_settings(db, event_type)
     if not rows:
         return True
 
@@ -77,6 +90,36 @@ def is_notification_allowed(db: Session, event_type: str) -> bool:
     if any(row.silence_until and row.silence_until > now for row in rows):
         return False
     return any(row.enabled for row in rows)
+
+
+def notification_cooldown_seconds(db: Session, event_type: str) -> int:
+    """Cooldown between repeat notifications: the exact event_type row wins,
+    then the "all" row, then NOTIFICATION_COOLDOWN_SECONDS. Previously both
+    the column and the env setting were defined but never read."""
+    rows = _matching_settings(db, event_type)
+    exact = next((r for r in rows if r.event_type == event_type), None)
+    row = exact or (rows[0] if rows else None)
+    if row is not None:
+        return row.cooldown_seconds
+    return get_settings().notification_cooldown_seconds
+
+
+def is_reminder_due(db: Session, incident: Incident, event_type: str = "incident_open") -> bool:
+    """True when the last notification for this incident (or its start, if
+    none was ever sent) is older than the cooldown. cooldown <= 0 disables
+    reminders."""
+    cooldown = notification_cooldown_seconds(db, event_type)
+    if cooldown <= 0:
+        return False
+    last_sent = (
+        db.query(func.max(NotificationDelivery.sent_at))
+        .filter(NotificationDelivery.incident_id == incident.id)
+        .scalar()
+    )
+    reference = last_sent or incident.first_seen
+    if reference.tzinfo is None:
+        reference = reference.replace(tzinfo=dt.timezone.utc)
+    return dt.datetime.now(dt.timezone.utc) - reference >= dt.timedelta(seconds=cooldown)
 
 
 async def notify_admins(db: Session, chat_ids: list[int], text: str, incident_id: str | None) -> None:
