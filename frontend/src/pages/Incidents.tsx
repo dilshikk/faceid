@@ -1,17 +1,25 @@
 import { useState } from "react";
 import { usePaginatedPolling } from "../hooks/useApi.ts";
-import { api } from "../api/client.ts";
+import { api, ApiError } from "../api/client.ts";
 import type { Incident } from "../types/index.ts";
 
 export default function Incidents() {
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
-  const { items, nextCursor, error, loading, loadMore } = usePaginatedPolling<Incident>(
+  const [actionError, setActionError] = useState<string | null>(null);
+  const { items, nextCursor, error, loading, loadMore, refresh } = usePaginatedPolling<Incident>(
     (cursor) => api.listIncidents(statusFilter, cursor),
     15000,
+    [statusFilter],
   );
 
   const acknowledge = async (id: string) => {
-    await api.acknowledgeIncident(id);
+    setActionError(null);
+    try {
+      await api.acknowledgeIncident(id);
+      refresh();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Не удалось подтвердить инцидент");
+    }
   };
 
   return (
@@ -30,6 +38,7 @@ export default function Incidents() {
 
       {loading && <p className="text-slate-400">Загрузка...</p>}
       {error && <p className="text-red-400">{error}</p>}
+      {actionError && <p className="text-red-400">{actionError}</p>}
       {!loading && items.length === 0 && <p className="text-slate-400">Инцидентов нет.</p>}
 
       <ul className="space-y-2">

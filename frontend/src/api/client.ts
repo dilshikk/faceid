@@ -20,6 +20,22 @@ export class ApiError extends Error {
   }
 }
 
+type ErrorBody = {
+  // FastAPI's HTTPException uses `detail` (string); validation errors (422)
+  // send a list of objects. The custom handler may use `message`.
+  detail?: string | { msg?: string }[];
+  message?: string;
+  request_id?: string;
+};
+
+function extractMessage(body: ErrorBody, fallback: string): string {
+  if (typeof body.detail === "string") return body.detail;
+  if (Array.isArray(body.detail) && body.detail.length > 0) {
+    return body.detail.map((d) => d.msg).filter(Boolean).join("; ") || fallback;
+  }
+  return body.message ?? fallback;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
@@ -35,8 +51,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     let message = `Request failed with status ${res.status}`;
     let requestId: string | undefined;
     try {
-      const body = (await res.json()) as { message?: string; request_id?: string };
-      message = body.message ?? message;
+      const body = (await res.json()) as ErrorBody;
+      message = extractMessage(body, message);
       requestId = body.request_id;
     } catch {
       // response body wasn't JSON; keep the generic message
