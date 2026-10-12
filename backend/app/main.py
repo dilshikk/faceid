@@ -1,0 +1,48 @@
+"""FastAPI application entrypoint. Runs on 127.0.0.1 only; Nginx terminates
+TLS and proxies to this process (TZ 3, 8).
+"""
+import uuid
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from app.api.v1 import auth, dashboard, incidents, metrics, notifications, services
+from app.core.config import get_settings
+from app.core.logging import configure_logging
+
+configure_logging()
+settings = get_settings()
+
+app = FastAPI(title="Bot Control Center API", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PATCH"],
+    allow_headers=["*"],
+)
+
+app.include_router(auth.router, prefix="/api/v1")
+app.include_router(dashboard.router, prefix="/api/v1")
+app.include_router(services.router, prefix="/api/v1")
+app.include_router(incidents.router, prefix="/api/v1")
+app.include_router(metrics.router, prefix="/api/v1")
+app.include_router(notifications.router, prefix="/api/v1")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    request_id = str(uuid.uuid4())
+    # Never leak internals (connection strings, stack traces, secrets) to clients.
+    return JSONResponse(
+        status_code=500,
+        content={"request_id": request_id, "message": "Internal server error"},
+    )
+
+
+@app.get("/healthz")
+def healthz():
+    # Does not reveal configuration, passwords, or connection strings.
+    return {"status": "ok"}
