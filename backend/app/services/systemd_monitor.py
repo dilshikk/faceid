@@ -6,10 +6,16 @@ Only read-only `show`/`is-active` calls with fixed arguments are issued.
 """
 import asyncio
 import datetime as dt
+import re
 
 from app.models.models import ServiceStatus
 
-ALLOWED_PROPERTIES = "ActiveState,SubState,MainPID,ExecMainStartTimestamp"
+ALLOWED_PROPERTIES = "LoadState,ActiveState,SubState,MainPID,ExecMainStartTimestamp"
+
+# Must start with an alphanumeric/underscore so a unit name can never be
+# parsed by systemctl/journalctl as a command-line option (e.g. "--host=x").
+_UNIT_NAME_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9@:_.\-]*\.service")
+_MAX_UNIT_NAME_LENGTH = 120
 
 
 class SystemdStatus:
@@ -32,7 +38,11 @@ def _map_state(active_state: str, sub_state: str) -> ServiceStatus:
 
 
 def is_valid_unit_name(unit_name: str) -> bool:
-    return bool(unit_name) and unit_name.endswith(".service") and "/" not in unit_name and " " not in unit_name
+    return (
+        bool(unit_name)
+        and len(unit_name) <= _MAX_UNIT_NAME_LENGTH
+        and _UNIT_NAME_RE.fullmatch(unit_name) is not None
+    )
 
 
 def normalize_unit_name(raw: str) -> str:
@@ -54,24 +64,36 @@ async def read_unit_status(unit_name: str) -> SystemdStatus:
     if not is_valid_unit_name(unit_name):
         return SystemdStatus(ServiceStatus.unknown, None, None)
 
+    proc: asyncio.subprocess.Process | None = None
     try:
         proc = await asyncio.create_subprocess_exec(
             "systemctl",
             "show",
-            unit_name,
             f"--property={ALLOWED_PROPERTIES}",
+            "--",  # end of options: the unit name is never treated as a flag
+            unit_name,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
-    except (OSError, TimeoutError):
+    except TimeoutError:
+        if proc is not None and proc.returncode is None:
+            proc.kill()  # do not leave a hung systemctl behind on every poll
+            await proc.wait()
+        return SystemdStatus(ServiceStatus.unknown, None, None)
+    except OSError:
         return SystemdStatus(ServiceStatus.unknown, None, None)
 
     values: dict[str, str] = {}
-    for line in stdout.decode().splitlines():
+    for line in stdout.decode(errors="replace").splitlines():
         if "=" in line:
             key, _, value = line.partition("=")
             values[key] = value
+
+    # A unit that does not exist reports ActiveState=inactive, which would
+    # look like a healthy-but-stopped service. Surface it as unknown instead.
+    if values.get("LoadState") == "not-found":
+        return SystemdStatus(ServiceStatus.unknown, None, None)
 
     active_state = values.get("ActiveState", "unknown")
     sub_state = values.get("SubState", "unknown")

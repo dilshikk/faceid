@@ -4,6 +4,7 @@ BCC never runs arbitrary shell commands and never stores secrets in
 config_json or audit metadata. Tokens/passwords are masked before logging.
 """
 import datetime as dt
+import re
 import uuid
 
 from fastapi import Depends, HTTPException, Request, status
@@ -15,6 +16,13 @@ from app.db import get_db
 from app.models.models import User, UserSession
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+
+_SECRET_PATTERNS = [
+    re.compile(r"(?i)(token|password|secret|api[_-]?key)\s*[=:]\s*\S+"),
+    re.compile(r"[A-Za-z0-9_\-]{24,}\.[A-Za-z0-9_\-]{20,}\.[A-Za-z0-9_\-]{20,}"),  # JWT-like
+    # Telegram bot token: <numeric id>:<35-char secret>, e.g. in .../bot123456789:AAH.../sendMessage
+    re.compile(r"\d{6,}:[A-Za-z0-9_\-]{30,}"),
+]
 
 
 def hash_password(raw: str) -> str:
@@ -81,13 +89,7 @@ def require_role(*roles: str):
 
 def mask_secret(value: str) -> str:
     """Mask likely-sensitive substrings before they ever reach logs/UI."""
-    import re
-
-    patterns = [
-        r"(?i)(token|password|secret|api[_-]?key)\s*[=:]\s*\S+",
-        r"[A-Za-z0-9_\-]{24,}\.[A-Za-z0-9_\-]{20,}\.[A-Za-z0-9_\-]{20,}",  # JWT-like
-    ]
     masked = value
-    for pattern in patterns:
-        masked = re.sub(pattern, "[REDACTED]", masked)
+    for pattern in _SECRET_PATTERNS:
+        masked = pattern.sub("[REDACTED]", masked)
     return masked

@@ -28,11 +28,13 @@ def _to_out(incident: Incident) -> IncidentOut:
 @router.get("", response_model=PageOut[IncidentOut])
 def list_all(
     status_filter: str | None = Query(default=None, alias="status"),
-    limit: int = Query(default=50, le=200),
+    limit: int = Query(default=50, ge=1, le=200),
     cursor: str | None = Query(default=None),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
+    if status_filter is not None and status_filter not in {s.value for s in IncidentStatus}:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown incident status")
     rows, next_cursor = list_incidents(db, status_filter, limit=limit, cursor=cursor)
     return PageOut(items=[_to_out(i) for i in rows], next_cursor=next_cursor)
 
@@ -62,6 +64,10 @@ def acknowledge(
     incident = db.get(Incident, incident_id)
     if incident is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Incident not found")
+
+    # A resolved incident must stay resolved; only open ones can be acknowledged.
+    if incident.status == IncidentStatus.resolved:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Incident is already resolved")
 
     incident.status = IncidentStatus.acknowledged
     incident.acknowledged_by = user.id

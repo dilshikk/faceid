@@ -30,6 +30,21 @@ def _utcnow() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
 
 
+def _str_enum(enum_cls: type[enum.Enum]) -> Enum:
+    """Enum stored as a plain VARCHAR holding the member *value*.
+
+    The Alembic migrations create these columns as String(20). A native
+    PostgreSQL ENUM type would not exist in the database, so inserts would
+    fail; native_enum=False keeps models and migrations consistent.
+    """
+    return Enum(
+        enum_cls,
+        native_enum=False,
+        length=20,
+        values_callable=lambda e: [member.value for member in e],
+    )
+
+
 class ServiceStatus(str, enum.Enum):
     active = "active"
     inactive = "inactive"
@@ -75,7 +90,7 @@ class ServiceStatusHistory(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     service_id: Mapped[str] = mapped_column(ForeignKey("monitored_services.id"))
-    status: Mapped[ServiceStatus] = mapped_column(Enum(ServiceStatus))
+    status: Mapped[ServiceStatus] = mapped_column(_str_enum(ServiceStatus))
     pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
     observed_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     details_json: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -91,7 +106,7 @@ class Incident(Base):
     fingerprint: Mapped[str] = mapped_column(String(120), index=True)
     severity: Mapped[str] = mapped_column(String(20), default="error")
     status: Mapped[IncidentStatus] = mapped_column(
-        Enum(IncidentStatus), default=IncidentStatus.open
+        _str_enum(IncidentStatus), default=IncidentStatus.open
     )
     first_seen: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     last_seen: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
@@ -119,7 +134,7 @@ class User(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     username: Mapped[str] = mapped_column(String(60), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.viewer)
+    role: Mapped[UserRole] = mapped_column(_str_enum(UserRole), default=UserRole.viewer)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 

@@ -1,6 +1,6 @@
 """Dashboard summary endpoint (TZ 4.1 and 7)."""
 from fastapi import APIRouter, Depends
-from sqlalchemy import func
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user
@@ -13,15 +13,39 @@ from app.services.health_checks import check_postgres, check_telegram
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
-@router.get("/summary", response_model=DashboardSummaryOut)
-async def summary(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def _count_services_by_latest_status(db: Session) -> dict[str, int]:
+    """Count services by their *current* (most recent) status.
+
+    Grouping the whole history table would count every past poll, so the
+    numbers would grow with each check instead of reflecting services.
+    """
+    latest = (
+        select(
+            ServiceStatusHistory.service_id.label("service_id"),
+            func.max(ServiceStatusHistory.observed_at).label("max_at"),
+        )
+        .group_by(ServiceStatusHistory.service_id)
+        .subquery()
+    )
     rows = (
         db.query(ServiceStatusHistory.status, func.count())
+        .join(
+            latest,
+            and_(
+                ServiceStatusHistory.service_id == latest.c.service_id,
+                ServiceStatusHistory.observed_at == latest.c.max_at,
+            ),
+        )
         .join(MonitoredService, MonitoredService.id == ServiceStatusHistory.service_id)
         .group_by(ServiceStatusHistory.status)
         .all()
     )
-    by_status = {status.value: count for status, count in rows}
+    return {status.value: count for status, count in rows}
+
+
+@router.get("/summary", response_model=DashboardSummaryOut)
+async def summary(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    by_status = _count_services_by_latest_status(db)
 
     last_check = db.query(func.max(ServiceStatusHistory.observed_at)).scalar()
     recent, _next_cursor = list_incidents(db, limit=10)
