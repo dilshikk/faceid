@@ -9,22 +9,22 @@ import asyncio
 from app.core.security import mask_secret
 
 
-async def read_unit_logs(unit_name: str, limit: int = 200) -> list[str]:
+async def read_unit_logs(unit_name: str, limit: int = 200, since: str | None = None) -> list[str]:
     if not unit_name.endswith(".service") or "/" in unit_name or " " in unit_name:
         return []
 
     limit = max(1, min(limit, 500))
 
+    args = ["-u", unit_name, "-n", str(limit), "--no-pager", "-o", "short-iso"]
+    if since:
+        # journalctl accepts "YYYY-MM-DD HH:MM:SS" (UTC, caller's responsibility
+        # to convert); this narrows the read instead of filtering client-side.
+        args += ["--since", since]
+
     try:
         proc = await asyncio.create_subprocess_exec(
             "journalctl",
-            "-u",
-            unit_name,
-            "-n",
-            str(limit),
-            "--no-pager",
-            "-o",
-            "short-iso",
+            *args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
