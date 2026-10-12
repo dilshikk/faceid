@@ -51,6 +51,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  live: () => request<{ status: string }>("/health/live"),
+  ready: () => request<{ status: string }>("/health/ready"),
   login: (username: string, password: string) =>
     request<{ ok: boolean; role: string }>("/auth/login", {
       method: "POST",
@@ -75,12 +77,19 @@ export const api = {
   getService: (id: string) => request<import("../types").Service>(`/services/${id}`),
   serviceHistory: (id: string, limit = 100) =>
     request<import("../types").ServiceHistoryEntry[]>(`/services/${id}/history?limit=${limit}`),
-  serviceLogs: (id: string, limit = 100) =>
-    request<import("../types").LogEvent[]>(`/services/${id}/logs?limit=${limit}`),
+  // `since` is an ISO 8601 UTC timestamp string; `q` is a case-insensitive
+  // substring filter applied by the backend against each log message.
+  serviceLogs: (id: string, limit = 100, filters?: { since?: string; q?: string }) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (filters?.since) params.set("since", filters.since);
+    if (filters?.q) params.set("q", filters.q);
+    return request<import("../types").LogEvent[]>(`/services/${id}/logs?${params.toString()}`);
+  },
   listIncidents: (status?: string, cursor?: string, limit = 50) =>
     request<Page<import("../types").Incident>>(
       `/incidents?limit=${limit}${status ? `&status=${status}` : ""}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
     ),
+  getIncident: (id: string) => request<import("../types").Incident>(`/incidents/${id}`),
   acknowledgeIncident: (id: string) =>
     request<import("../types").Incident>(`/incidents/${id}/acknowledge`, { method: "POST" }),
   serverMetrics: () => request<import("../types").ServerMetric>("/metrics/server"),
