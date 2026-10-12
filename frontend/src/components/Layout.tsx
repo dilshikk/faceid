@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useApi.ts";
 
 const LINKS = [
@@ -10,7 +10,19 @@ const LINKS = [
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const { logout } = useAuth();
+
+  // Always leave the page, even if the server call fails (e.g. the session
+  // already expired). Otherwise the user would stay on a protected page.
+  const onLogout = async () => {
+    try {
+      await logout();
+    } catch {
+      sessionStorage.removeItem("bcc_role");
+    }
+    navigate("/login", { replace: true });
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -26,7 +38,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               {link.label}
             </Link>
           ))}
-          <button onClick={() => logout()} className="text-slate-400 hover:text-white">
+          <button onClick={onLogout} className="text-slate-400 hover:text-white">
             Выйти
           </button>
         </nav>

@@ -2,9 +2,16 @@
 import datetime as dt
 from typing import Generic, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 T = TypeVar("T")
+
+# Limits mirror the database column sizes so oversized input is rejected with
+# a 422 instead of crashing on insert with a 500.
+NAME_MAX = 120
+USERNAME_MAX = 60
+MIN_INTERVAL_SECONDS = 5
+MAX_INTERVAL_SECONDS = 3600
 
 
 class PageOut(BaseModel, Generic[T]):
@@ -15,8 +22,9 @@ class PageOut(BaseModel, Generic[T]):
 
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=1, max_length=USERNAME_MAX)
+    # Upper bound keeps a huge password from being fed to Argon2.
+    password: str = Field(min_length=1, max_length=256)
 
 
 class ServiceOut(BaseModel):
@@ -31,15 +39,17 @@ class ServiceOut(BaseModel):
 
 
 class ServiceCreate(BaseModel):
-    name: str
-    unit_name: str
-    interval_seconds: int = 15
+    name: str = Field(min_length=1, max_length=NAME_MAX)
+    unit_name: str = Field(min_length=1, max_length=NAME_MAX)
+    interval_seconds: int = Field(default=15, ge=MIN_INTERVAL_SECONDS, le=MAX_INTERVAL_SECONDS)
 
 
 class ServiceUpdate(BaseModel):
-    name: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=NAME_MAX)
     enabled: bool | None = None
-    interval_seconds: int | None = None
+    interval_seconds: int | None = Field(
+        default=None, ge=MIN_INTERVAL_SECONDS, le=MAX_INTERVAL_SECONDS
+    )
 
 
 class ServiceHistoryOut(BaseModel):
@@ -92,11 +102,12 @@ class NotificationSettingOut(BaseModel):
 
 
 class NotificationSettingUpdate(BaseModel):
-    cooldown_seconds: int | None = None
+    cooldown_seconds: int | None = Field(default=None, ge=0, le=7 * 24 * 3600)
     enabled: bool | None = None
-    # Minutes from now to silence this event type; 0 (or omitted as None
-    # vs explicit 0) clears an existing silence.
-    silence_minutes: int | None = None
+    # Minutes from now to silence this event type; 0 clears an existing
+    # silence. Capped at one year so timedelta/datetime arithmetic cannot
+    # overflow and turn into a 500.
+    silence_minutes: int | None = Field(default=None, ge=0, le=525600)
 
 
 class ErrorResponse(BaseModel):

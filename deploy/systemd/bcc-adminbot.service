@@ -1,11 +1,13 @@
 [Unit]
 Description=Bot Control Center Telegram Admin Bot
-After=network.target
+After=network.target postgresql.service
 
 [Service]
 Type=simple
 User=bcc
 Group=bcc
+# The /logs bot command runs journalctl (needs the systemd-journal group).
+SupplementaryGroups=systemd-journal
 WorkingDirectory=/opt/bot-control-center/backend
 EnvironmentFile=/etc/bot-control-center/bcc.env
 ExecStart=/opt/bot-control-center/backend/.venv/bin/python -m app.telegram_admin.main
