@@ -1,31 +1,16 @@
 """Dashboard summary endpoint (TZ 4.1 and 7)."""
-import datetime as dt
-
-import httpx
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
 from app.core.security import get_current_user
 from app.db import get_db
-from app.models.models import Incident, MonitoredService, ServiceStatusHistory, User
+from app.models.models import MonitoredService, ServiceStatusHistory, User
 from app.repositories.repositories import latest_server_metric, list_incidents
 from app.schemas.schemas import DashboardSummaryOut, IncidentOut, ServerMetricOut
+from app.services.health_checks import check_postgres, check_telegram
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
-
-
-async def _telegram_healthy() -> bool:
-    settings = get_settings()
-    if not settings.telegram_bot_token:
-        return False
-    try:
-        async with httpx.AsyncClient(timeout=5) as client:
-            resp = await client.get(f"https://api.telegram.org/bot{settings.telegram_bot_token}/getMe")
-            return resp.status_code == 200
-    except httpx.HTTPError:
-        return False
 
 
 @router.get("/summary", response_model=DashboardSummaryOut)
@@ -39,14 +24,8 @@ async def summary(db: Session = Depends(get_db), _: User = Depends(get_current_u
     by_status = {status.value: count for status, count in rows}
 
     last_check = db.query(func.max(ServiceStatusHistory.observed_at)).scalar()
-    recent = list_incidents(db, limit=10)
+    recent, _next_cursor = list_incidents(db, limit=10)
     metric = latest_server_metric(db)
-
-    postgres_healthy = True
-    try:
-        db.execute(func.now())
-    except Exception:  # noqa: BLE001
-        postgres_healthy = False
 
     return DashboardSummaryOut(
         services_by_status=by_status,
@@ -74,6 +53,8 @@ async def summary(db: Session = Depends(get_db), _: User = Depends(get_current_u
             if metric
             else None
         ),
-        postgres_healthy=postgres_healthy,
-        telegram_healthy=await _telegram_healthy(),
+        # Live checks for the dashboard; the worker separately persists
+        # these into health_checks on each poll cycle for history (TZ 6).
+        postgres_healthy=check_postgres(db),
+        telegram_healthy=await check_telegram(),
     )

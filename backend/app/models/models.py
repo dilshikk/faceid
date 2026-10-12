@@ -153,6 +153,10 @@ class NotificationSetting(Base):
     recipient: Mapped[str] = mapped_column(String(120))
     cooldown_seconds: Mapped[int] = mapped_column(Integer, default=900)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # When set and in the future, notifications for this event_type are
+    # suppressed (TZ 5/8 "silence"). Set via PATCH .../settings/{id} or the
+    # Telegram /silence command.
+    silence_until: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class NotificationDelivery(Base):

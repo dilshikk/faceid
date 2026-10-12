@@ -1,7 +1,17 @@
 """Pydantic request/response schemas. No secrets are ever included here."""
 import datetime as dt
+from typing import Generic, TypeVar
 
 from pydantic import BaseModel
+
+T = TypeVar("T")
+
+
+class PageOut(BaseModel, Generic[T]):
+    """Cursor-paginated response wrapper (TZ 7: bounded response size)."""
+
+    items: list[T]
+    next_cursor: str | None = None
 
 
 class LoginRequest(BaseModel):
@@ -18,6 +28,18 @@ class ServiceOut(BaseModel):
     status: str
     pid: int | None = None
     last_transition_at: dt.datetime | None = None
+
+
+class ServiceCreate(BaseModel):
+    name: str
+    unit_name: str
+    interval_seconds: int = 15
+
+
+class ServiceUpdate(BaseModel):
+    name: str | None = None
+    enabled: bool | None = None
+    interval_seconds: int | None = None
 
 
 class ServiceHistoryOut(BaseModel):
@@ -66,11 +88,15 @@ class NotificationSettingOut(BaseModel):
     recipient: str
     cooldown_seconds: int
     enabled: bool
+    silence_until: dt.datetime | None = None
 
 
 class NotificationSettingUpdate(BaseModel):
     cooldown_seconds: int | None = None
     enabled: bool | None = None
+    # Minutes from now to silence this event type; 0 (or omitted as None
+    # vs explicit 0) clears an existing silence.
+    silence_minutes: int | None = None
 
 
 class ErrorResponse(BaseModel):
