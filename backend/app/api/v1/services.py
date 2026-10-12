@@ -156,6 +156,10 @@ def history(
 async def logs(
     service_id: str,
     limit: int = Query(default=100, le=500),
+    since: dt.datetime | None = Query(
+        default=None, description="Only return log lines observed at or after this UTC timestamp"
+    ),
+    q: str | None = Query(default=None, description="Case-insensitive substring filter on the log message"),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
@@ -166,6 +170,17 @@ async def logs(
     # Live tail from journald (read-only, allowlisted unit), per TZ 4.3.
     # Each line already carries its own timestamp (short-iso format), so
     # parse that directly instead of guessing it from an unrelated table.
-    lines = await read_unit_logs(service.unit_name, limit)
+    since_arg = None
+    if since is not None:
+        since_utc = since if since.tzinfo else since.replace(tzinfo=dt.timezone.utc)
+        since_arg = since_utc.astimezone(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+    lines = await read_unit_logs(service.unit_name, limit, since=since_arg)
     now = dt.datetime.now(dt.timezone.utc)
-    return [_parse_journal_line(line, now) for line in lines]
+    events = [_parse_journal_line(line, now) for line in lines]
+
+    if q:
+        needle = q.lower()
+        events = [e for e in events if needle in e.message.lower()]
+
+    return events
