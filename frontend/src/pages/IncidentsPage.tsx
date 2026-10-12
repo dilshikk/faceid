@@ -1,10 +1,14 @@
 import { useState } from "react";
-import { usePolling } from "../hooks/useApi.ts";
+import { usePaginatedPolling } from "../hooks/useApi.ts";
 import { api } from "../api/client.ts";
+import type { Incident } from "../types/index.ts";
 
 export default function IncidentsPage() {
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
-  const { data, error, loading } = usePolling(() => api.listIncidents(statusFilter), 15000);
+  const { items, nextCursor, error, loading, loadMore } = usePaginatedPolling<Incident>(
+    (cursor) => api.listIncidents(statusFilter, cursor),
+    15000,
+  );
 
   const acknowledge = async (id: string) => {
     await api.acknowledgeIncident(id);
@@ -26,10 +30,10 @@ export default function IncidentsPage() {
 
       {loading && <p className="text-slate-400">Загрузка...</p>}
       {error && <p className="text-red-400">{error}</p>}
-      {data && data.length === 0 && <p className="text-slate-400">Инцидентов нет.</p>}
+      {!loading && items.length === 0 && <p className="text-slate-400">Инцидентов нет.</p>}
 
       <ul className="space-y-2">
-        {data?.map((incident) => (
+        {items.map((incident) => (
           <li key={incident.id} className="flex items-center justify-between rounded-lg border border-slate-800 p-4">
             <div>
               <p className="font-medium">{incident.severity}</p>
@@ -48,6 +52,15 @@ export default function IncidentsPage() {
           </li>
         ))}
       </ul>
+
+      {nextCursor && (
+        <button
+          onClick={() => loadMore()}
+          className="text-sm rounded bg-slate-800 px-4 py-2 hover:bg-slate-700"
+        >
+          Показать ещё
+        </button>
+      )}
     </div>
   );
 }
