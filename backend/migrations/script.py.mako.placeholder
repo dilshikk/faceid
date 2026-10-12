@@ -1,0 +1,1 @@
+${config.get('output_encoding', 'utf-8')}
