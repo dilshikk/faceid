@@ -38,11 +38,11 @@ function toCell(value: unknown): Cell {
   return JSON.stringify(value);
 }
 
-function errorMessage(error: unknown): string {
+export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Неизвестная ошибка";
 }
 
-async function connect(bot: Doc<"bots">): Promise<Client> {
+export async function connect(bot: Doc<"bots">): Promise<Client> {
   const client = new Client({
     connectionString: bot.connectionString,
     ssl: bot.ssl ? { rejectUnauthorized: false } : undefined,
