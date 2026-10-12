@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # Installs the three BCC systemd units and reloads systemd.
 # Run as root after the backend venv and frontend build already exist at
-# /opt/bot-control-center/.
+# /opt/bot-control-center/. Works from any directory.
 set -euo pipefail
 
-cp deploy/systemd/bcc-api.service /etc/systemd/system/bcc-api.service
-cp deploy/systemd/bcc-worker.service /etc/systemd/system/bcc-worker.service
-cp deploy/systemd/bcc-adminbot.service /etc/systemd/system/bcc-adminbot.service
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+UNITS_DIR="${SCRIPT_DIR}/../systemd"
+
+for unit in bcc-api bcc-worker bcc-adminbot; do
+  cp "${UNITS_DIR}/${unit}.service" "/etc/systemd/system/${unit}.service"
+done
 
 systemctl daemon-reload
 systemctl enable bcc-api bcc-worker bcc-adminbot

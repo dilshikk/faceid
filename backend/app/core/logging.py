@@ -19,3 +19,9 @@ def configure_logging() -> None:
     root = logging.getLogger()
     root.setLevel(logging.INFO)
     root.handlers = [handler]
+
+    # httpx logs every request URL at INFO, and Telegram Bot API URLs contain
+    # the bot token. Keep these libraries quiet (mask_secret is a second line
+    # of defence, not the only one).
+    for noisy in ("httpx", "httpcore"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)

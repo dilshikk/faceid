@@ -6,9 +6,10 @@ After=network.target postgresql.service
 Type=simple
 User=bcc
 Group=bcc
-# Needs read access to systemctl show / journalctl for allowlisted units only.
-# Grant via a dedicated polkit rule or sudoers entry scoped to those exact
-# commands - never a blanket "sudo systemctl *".
+# Read-only `systemctl show` works for any user. `journalctl` only returns
+# other services' logs for members of the systemd-journal group; without it
+# the log view is silently empty.
+SupplementaryGroups=systemd-journal
 WorkingDirectory=/opt/bot-control-center/backend
 EnvironmentFile=/etc/bot-control-center/bcc.env
 ExecStart=/opt/bot-control-center/backend/.venv/bin/python -m app.workers.monitor_worker

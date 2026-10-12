@@ -33,6 +33,8 @@ async def check_telegram() -> bool:
             resp = await client.get(f"https://api.telegram.org/bot{settings.telegram_bot_token}/getMe")
             return resp.status_code == 200
     except httpx.HTTPError:
+        # Deliberately not logging the exception: its text contains the bot
+        # token (it is part of the request URL).
         return False
 
 

@@ -11,8 +11,12 @@ import { api } from "../api/client.ts";
 export default function Logs() {
   const { id } = useParams<{ id: string }>();
   const [query, setQuery] = useState("");
-  const service = usePolling(() => api.getService(id!), 30000);
-  const logs = usePolling(() => api.serviceLogs(id!, 200, query ? { q: query } : undefined), 15000);
+  const service = usePolling(() => api.getService(id!), 30000, [id]);
+  const logs = usePolling(
+    () => api.serviceLogs(id!, 200, query ? { q: query } : undefined),
+    15000,
+    [id, query],
+  );
 
   return (
     <div className="space-y-4">
