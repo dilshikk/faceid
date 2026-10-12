@@ -5,6 +5,7 @@ from sqlalchemy import and_, desc, or_
 from sqlalchemy.orm import Session
 
 from app.models.models import (
+    HealthCheck,
     Incident,
     LogEvent,
     MonitoredService,
@@ -14,19 +15,29 @@ from app.models.models import (
 )
 
 
+class InvalidCursorError(ValueError):
+    """The client sent a pagination cursor we did not issue."""
+
+
 def _encode_cursor(ts: dt.datetime, row_id: str) -> str:
     return f"{ts.isoformat()}::{row_id}"
 
 
 def _decode_cursor(cursor: str) -> tuple[dt.datetime, str]:
-    ts_raw, _, row_id = cursor.partition("::")
-    return dt.datetime.fromisoformat(ts_raw), row_id
+    ts_raw, sep, row_id = cursor.partition("::")
+    if not sep or not row_id:
+        raise InvalidCursorError("Invalid cursor")
+    try:
+        return dt.datetime.fromisoformat(ts_raw), row_id
+    except ValueError as exc:
+        raise InvalidCursorError("Invalid cursor") from exc
 
 
 def list_services(
     db: Session, limit: int = 100, cursor: str | None = None
 ) -> tuple[list[MonitoredService], str | None]:
     """Cursor-paginated, newest first (TZ 7: bounded response size)."""
+    limit = max(1, limit)
     query = db.query(MonitoredService).order_by(
         desc(MonitoredService.created_at), desc(MonitoredService.id)
     )
@@ -39,7 +50,7 @@ def list_services(
             )
         )
     rows = query.limit(limit).all()
-    next_cursor = _encode_cursor(rows[-1].created_at, rows[-1].id) if len(rows) == limit else None
+    next_cursor = _encode_cursor(rows[-1].created_at, rows[-1].id) if rows and len(rows) == limit else None
     return rows, next_cursor
 
 
@@ -87,7 +98,7 @@ def service_history(db: Session, service_id: str, limit: int = 100) -> list[Serv
         db.query(ServiceStatusHistory)
         .filter(ServiceStatusHistory.service_id == service_id)
         .order_by(desc(ServiceStatusHistory.observed_at))
-        .limit(limit)
+        .limit(max(1, limit))
         .all()
     )
 
@@ -96,6 +107,7 @@ def list_incidents(
     db: Session, status: str | None = None, limit: int = 100, cursor: str | None = None
 ) -> tuple[list[Incident], str | None]:
     """Cursor-paginated, newest first (TZ 7: bounded response size)."""
+    limit = max(1, limit)
     query = db.query(Incident)
     if status:
         query = query.filter(Incident.status == status)
@@ -109,7 +121,7 @@ def list_incidents(
             )
         )
     rows = query.limit(limit).all()
-    next_cursor = _encode_cursor(rows[-1].last_seen, rows[-1].id) if len(rows) == limit else None
+    next_cursor = _encode_cursor(rows[-1].last_seen, rows[-1].id) if rows and len(rows) == limit else None
     return rows, next_cursor
 
 
@@ -121,7 +133,7 @@ def open_incident_for_fingerprint(db: Session, service_id: str, fingerprint: str
             Incident.fingerprint == fingerprint,
             Incident.status != "resolved",
         )
-        .one_or_none()
+        .first()
     )
 
 
@@ -129,12 +141,21 @@ def latest_server_metric(db: Session) -> ServerMetric | None:
     return db.query(ServerMetric).order_by(desc(ServerMetric.observed_at)).first()
 
 
+def latest_health_check(db: Session, dependency: str) -> HealthCheck | None:
+    return (
+        db.query(HealthCheck)
+        .filter(HealthCheck.dependency == dependency)
+        .order_by(desc(HealthCheck.checked_at))
+        .first()
+    )
+
+
 def recent_log_events(db: Session, service_id: str, limit: int = 100) -> list[LogEvent]:
     return (
         db.query(LogEvent)
         .filter(LogEvent.service_id == service_id)
         .order_by(desc(LogEvent.event_time))
-        .limit(limit)
+        .limit(max(1, limit))
         .all()
     )
 
@@ -148,15 +169,17 @@ def silence_event_type(db: Session, event_type: str, minutes: int) -> Notificati
     setting = (
         db.query(NotificationSetting)
         .filter(NotificationSetting.channel == "telegram", NotificationSetting.event_type == event_type)
-        .one_or_none()
+        .first()
     )
     if setting is None:
         setting = NotificationSetting(channel="telegram", event_type=event_type, recipient="telegram_admins")
         db.add(setting)
 
     setting.enabled = True
+    # Cap at one year so timedelta/datetime arithmetic cannot overflow.
+    capped = min(minutes, 525600)
     setting.silence_until = (
-        dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=minutes) if minutes > 0 else None
+        dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=capped) if capped > 0 else None
     )
     db.commit()
     db.refresh(setting)

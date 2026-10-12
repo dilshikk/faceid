@@ -7,12 +7,22 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.rate_limit import login_rate_limiter
-from app.core.security import create_session, get_current_user, revoke_session, verify_password
+from app.core.security import (
+    create_session,
+    get_current_user,
+    hash_password,
+    revoke_session,
+    verify_password,
+)
 from app.db import get_db
 from app.models.models import AuditLog, User
 from app.schemas.schemas import LoginRequest
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# Verified against when the username does not exist, so a failed login takes
+# about as long for unknown users as for known ones (no user enumeration by timing).
+_DUMMY_HASH = hash_password("bcc-dummy-password-for-timing")
 
 
 @router.post("/login", dependencies=[Depends(login_rate_limiter)])
@@ -20,7 +30,8 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
     settings = get_settings()
     user = db.query(User).filter(User.username == payload.username).one_or_none()
 
-    if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
+    password_ok = verify_password(payload.password, user.password_hash if user else _DUMMY_HASH)
+    if user is None or not user.is_active or not password_ok:
         db.add(AuditLog(actor=payload.username, action="login", result="failure"))
         db.commit()
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")

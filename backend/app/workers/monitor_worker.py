@@ -7,10 +7,12 @@ import asyncio
 import datetime as dt
 import logging
 
+from sqlalchemy.orm import Session
+
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.db import SessionLocal
-from app.models.models import MonitoredService, ServerMetric, ServiceStatusHistory
+from app.models.models import MonitoredService, ServerMetric, ServiceStatus, ServiceStatusHistory
 from app.services.health_checks import check_postgres, check_telegram, record_health_check
 from app.services.incident_manager import evaluate
 from app.services.metrics_collector import collect_server_metrics
@@ -29,38 +31,53 @@ _consecutive_failures: dict[str, int] = {}
 _last_cleanup: dt.datetime | None = None
 
 
-async def poll_once(db) -> None:
+def _update_failure_counter(service_id: str, state: ServiceStatus) -> int:
+    """Count consecutive failed/unknown checks.
+
+    `activating` neither counts nor resets: a service that keeps crashing and
+    restarting alternates failed/activating, and resetting on activating would
+    keep the counter below the threshold forever (no alert ever).
+    """
+    if state in (ServiceStatus.failed, ServiceStatus.unknown):
+        _consecutive_failures[service_id] = _consecutive_failures.get(service_id, 0) + 1
+    elif state != ServiceStatus.activating:
+        _consecutive_failures[service_id] = 0
+    return _consecutive_failures.get(service_id, 0)
+
+
+async def poll_service(db: Session, service: MonitoredService, admin_ids: list[int]) -> None:
+    status = await read_unit_status(service.unit_name)
+    db.add(ServiceStatusHistory(service_id=service.id, status=status.state, pid=status.pid))
+    db.commit()
+
+    failures = _update_failure_counter(service.id, status.state)
+    outcome = evaluate(db, service, status.state, failures)
+
+    if outcome.newly_confirmed and outcome.incident and admin_ids:
+        if is_notification_allowed(db, "incident_open"):
+            text = format_incident_message(service, outcome.incident)
+            await notify_admins(db, admin_ids, text, outcome.incident.id)
+    if outcome.recovered and admin_ids:
+        if is_notification_allowed(db, "incident_recovered"):
+            text = format_recovery_message(service)
+            await notify_admins(db, admin_ids, text, outcome.recovered.id)
+
+
+async def poll_once(db: Session) -> None:
     settings = get_settings()
     services = db.query(MonitoredService).filter(MonitoredService.enabled.is_(True)).all()
+    admin_ids = settings.telegram_admin_ids_list
 
     for service in services:
-        status = await read_unit_status(service.unit_name)
-        db.add(
-            ServiceStatusHistory(
-                service_id=service.id,
-                status=status.state,
-                pid=status.pid,
-            )
-        )
-        db.commit()
+        # One broken service must not skip the others or the metrics below.
+        try:
+            await poll_service(db, service, admin_ids)
+        except Exception:  # noqa: BLE001
+            db.rollback()
+            logger.exception("polling failed for %s", service.unit_name)
 
-        if status.state.value in ("failed", "unknown"):
-            _consecutive_failures[service.id] = _consecutive_failures.get(service.id, 0) + 1
-        else:
-            _consecutive_failures[service.id] = 0
-
-        outcome = evaluate(db, service, status.state, _consecutive_failures[service.id])
-        admin_ids = settings.telegram_admin_ids_list
-        if outcome.newly_confirmed and outcome.incident and admin_ids:
-            if is_notification_allowed(db, "incident_open"):
-                text = format_incident_message(service, outcome.incident)
-                await notify_admins(db, admin_ids, text, outcome.incident.id)
-        if outcome.recovered and admin_ids:
-            if is_notification_allowed(db, "incident_recovered"):
-                text = format_recovery_message(service)
-                await notify_admins(db, admin_ids, text, outcome.recovered.id)
-
-    metrics = collect_server_metrics()
+    # psutil.cpu_percent(interval=0.5) sleeps; keep it off the event loop.
+    metrics = await asyncio.to_thread(collect_server_metrics)
     db.add(
         ServerMetric(
             cpu_percent=metrics.cpu_percent,
@@ -72,8 +89,8 @@ async def poll_once(db) -> None:
     )
     db.commit()
 
-    # Persist dependency health history (TZ 6: health_checks was previously
-    # created in the schema but never written to).
+    # Persist dependency health history; the dashboard reads the latest rows
+    # instead of calling Telegram on every request.
     postgres_healthy = check_postgres(db)
     telegram_healthy = await check_telegram()
     record_health_check(db, "postgres", postgres_healthy)
@@ -81,9 +98,8 @@ async def poll_once(db) -> None:
     db.commit()
 
 
-async def maybe_run_cleanup(db) -> None:
-    """Run retention cleanup at most once a day (TZ acceptance criterion
-    #12). Previously there was no cleanup job at all."""
+async def maybe_run_cleanup(db: Session) -> None:
+    """Run retention cleanup at most once a day (TZ acceptance criterion #12)."""
     global _last_cleanup
     now = dt.datetime.now(dt.timezone.utc)
     if _last_cleanup is not None and now - _last_cleanup < dt.timedelta(days=1):
@@ -103,7 +119,8 @@ async def run_forever() -> None:
             await poll_once(db)
             await maybe_run_cleanup(db)
         except Exception:  # noqa: BLE001 - worker must never crash the loop
-            logger.exception("poll_once failed")
+            db.rollback()
+            logger.exception("worker cycle failed")
         finally:
             db.close()
         await asyncio.sleep(settings.monitor_default_interval_seconds)

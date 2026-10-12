@@ -9,6 +9,10 @@ from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.telegram_admin.handlers import router
 
+# Messages without a sender (e.g. channel posts) have from_user=None, and every
+# handler reads message.from_user.id. Drop them before they reach a handler.
+router.message.filter(lambda message: message.from_user is not None)
+
 
 async def main() -> None:
     configure_logging()

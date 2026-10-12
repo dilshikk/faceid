@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.security import get_current_user
 from app.db import get_db
 from app.models.models import MonitoredService, ServiceStatusHistory, User
-from app.repositories.repositories import latest_server_metric, list_incidents
+from app.repositories.repositories import latest_health_check, latest_server_metric, list_incidents
 from app.schemas.schemas import DashboardSummaryOut, IncidentOut, ServerMetricOut
 from app.services.health_checks import check_postgres, check_telegram
 
@@ -43,6 +43,16 @@ def _count_services_by_latest_status(db: Session) -> dict[str, int]:
     return {status.value: count for status, count in rows}
 
 
+async def _telegram_healthy(db: Session) -> bool:
+    """Use the worker's latest recorded check (it runs every poll cycle).
+    Only call Telegram live when nothing has been recorded yet, so every
+    dashboard refresh does not hit the Telegram API."""
+    recorded = latest_health_check(db, "telegram")
+    if recorded is not None:
+        return recorded.is_healthy
+    return await check_telegram()
+
+
 @router.get("/summary", response_model=DashboardSummaryOut)
 async def summary(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     by_status = _count_services_by_latest_status(db)
@@ -77,8 +87,6 @@ async def summary(db: Session = Depends(get_db), _: User = Depends(get_current_u
             if metric
             else None
         ),
-        # Live checks for the dashboard; the worker separately persists
-        # these into health_checks on each poll cycle for history (TZ 6).
         postgres_healthy=check_postgres(db),
-        telegram_healthy=await check_telegram(),
+        telegram_healthy=await _telegram_healthy(db),
     )
