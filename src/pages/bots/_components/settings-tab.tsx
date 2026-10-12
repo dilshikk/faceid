@@ -84,6 +84,8 @@ export default function SettingsTab({ bot }: Props) {
   const [usersTable, setUsersTable] = useState(bot.usersTable ?? NONE);
   const [logsTable, setLogsTable] = useState(bot.logsTable ?? NONE);
   const [errorsTable, setErrorsTable] = useState(bot.errorsTable ?? NONE);
+  const [chatIdColumn, setChatIdColumn] = useState(bot.chatIdColumn ?? NONE);
+  const [alertChatId, setAlertChatId] = useState(bot.alertChatId ?? "");
   const [saving, setSaving] = useState(false);
 
   const names = tables.data?.map((t) => t.name) ?? [];
@@ -91,6 +93,11 @@ export default function SettingsTab({ bot }: Props) {
   const withSaved = (value: string) =>
     value !== NONE && !names.includes(value) ? [...names, value] : names;
   const toValue = (v: string) => (v === NONE ? null : v);
+  const userColumns = tables.data?.find((t) => t.name === usersTable)?.columns ?? [];
+  const columnOptions =
+    chatIdColumn !== NONE && !userColumns.includes(chatIdColumn)
+      ? [...userColumns, chatIdColumn]
+      : userColumns;
 
   const save = async () => {
     setSaving(true);
@@ -108,6 +115,8 @@ export default function SettingsTab({ bot }: Props) {
         usersTable: toValue(usersTable),
         logsTable: toValue(logsTable),
         errorsTable: toValue(errorsTable),
+        chatIdColumn: toValue(chatIdColumn),
+        alertChatId,
       });
       setToken("");
       setPassword("");
@@ -204,8 +213,31 @@ export default function SettingsTab({ bot }: Props) {
             </details>
           )}
           <TableField label="Пользователи" value={usersTable} tables={withSaved(usersTable)} onChange={setUsersTable} />
+          <TableField label="Колонка с Telegram ID (для рассылки)" value={chatIdColumn} tables={columnOptions} onChange={setChatIdColumn} />
           <TableField label="Журнал событий" value={logsTable} tables={withSaved(logsTable)} onChange={setLogsTable} />
           <TableField label="Ошибки" value={errorsTable} tables={withSaved(errorsTable)} onChange={setErrorsTable} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Уведомления о сбоях</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Label htmlFor="s-alert">Ваш Telegram ID</Label>
+          <Input
+            id="s-alert"
+            inputMode="numeric"
+            placeholder="123456789"
+            value={alertChatId}
+            onChange={(e) => setAlertChatId(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Если бот перестанет отвечать, панель напишет вам в Telegram от имени
+            этого бота. Сначала откройте бота и нажмите Start, иначе Telegram не
+            даст ему написать первым. Свой ID можно узнать у бота @userinfobot.
+            Оставьте пустым, чтобы отключить.
+          </p>
         </CardContent>
       </Card>
 
