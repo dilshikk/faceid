@@ -1,4 +1,5 @@
-"""Incident listing and acknowledgement (TZ 4.1, 5, 7)."""
+"""Incident listing, single-incident detail, and acknowledgement
+(TZ 4.1, 5, 7)."""
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -12,6 +13,18 @@ from app.schemas.schemas import IncidentOut, PageOut
 router = APIRouter(prefix="/incidents", tags=["incidents"])
 
 
+def _to_out(incident: Incident) -> IncidentOut:
+    return IncidentOut(
+        id=incident.id,
+        service_id=incident.service_id,
+        severity=incident.severity,
+        status=incident.status.value,
+        first_seen=incident.first_seen,
+        last_seen=incident.last_seen,
+        resolved_at=incident.resolved_at,
+    )
+
+
 @router.get("", response_model=PageOut[IncidentOut])
 def list_all(
     status_filter: str | None = Query(default=None, alias="status"),
@@ -21,19 +34,19 @@ def list_all(
     _: User = Depends(get_current_user),
 ):
     rows, next_cursor = list_incidents(db, status_filter, limit=limit, cursor=cursor)
-    items = [
-        IncidentOut(
-            id=i.id,
-            service_id=i.service_id,
-            severity=i.severity,
-            status=i.status.value,
-            first_seen=i.first_seen,
-            last_seen=i.last_seen,
-            resolved_at=i.resolved_at,
-        )
-        for i in rows
-    ]
-    return PageOut(items=items, next_cursor=next_cursor)
+    return PageOut(items=[_to_out(i) for i in rows], next_cursor=next_cursor)
+
+
+@router.get("/{incident_id}", response_model=IncidentOut)
+def get_one(
+    incident_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    incident = db.get(Incident, incident_id)
+    if incident is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Incident not found")
+    return _to_out(incident)
 
 
 @router.post(
@@ -55,12 +68,4 @@ def acknowledge(
     db.add(AuditLog(actor=user.username, action=f"acknowledge_incident:{incident_id}", result="success"))
     db.commit()
 
-    return IncidentOut(
-        id=incident.id,
-        service_id=incident.service_id,
-        severity=incident.severity,
-        status=incident.status.value,
-        first_seen=incident.first_seen,
-        last_seen=incident.last_seen,
-        resolved_at=incident.resolved_at,
-    )
+    return _to_out(incident)
