@@ -11,7 +11,8 @@ Group=bcc
 SupplementaryGroups=systemd-journal
 WorkingDirectory=/opt/bot-control-center/backend
 EnvironmentFile=/etc/bot-control-center/bcc.env
-ExecStart=/opt/bot-control-center/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8081
+# Port 8091: 8081 is already used by a Docker container on the VPS.
+ExecStart=/opt/bot-control-center/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8091
 Restart=on-failure
 RestartSec=5
 
