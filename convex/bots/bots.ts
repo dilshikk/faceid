@@ -148,6 +148,7 @@ export const update = mutation({
     usersTable: v.optional(v.union(v.string(), v.null())),
     logsTable: v.optional(v.union(v.string(), v.null())),
     errorsTable: v.optional(v.union(v.string(), v.null())),
+    chatIdColumn: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx, args) => {
     await requireAllowed(ctx, true);
@@ -197,6 +198,9 @@ export const update = mutation({
     if (args.errorsTable !== undefined) {
       patch.errorsTable = args.errorsTable ?? undefined;
     }
+    if (args.chatIdColumn !== undefined) {
+      patch.chatIdColumn = args.chatIdColumn ?? undefined;
+    }
     await ctx.db.patch("bots", args.botId, patch);
     return null;
   },
@@ -219,6 +223,16 @@ export const getForUser = internalQuery({
   args: { botId: v.id("bots"), email: v.string() },
   handler: async (ctx, args) => {
     if (!(await findAllowed(ctx, args.email))) return null;
+    return await ctx.db.get("bots", args.botId);
+  },
+});
+
+// Same as getForUser, but only for admins (broadcasts send messages to people).
+export const getForAdmin = internalQuery({
+  args: { botId: v.id("bots"), email: v.string() },
+  handler: async (ctx, args) => {
+    const entry = await findAllowed(ctx, args.email);
+    if (!entry?.isAdmin) return null;
     return await ctx.db.get("bots", args.botId);
   },
 });
