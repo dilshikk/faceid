@@ -41,5 +41,35 @@ export default defineSchema({
     lastCheckedAt: v.optional(v.string()),
     lastLatencyMs: v.optional(v.number()),
     lastError: v.optional(v.string()),
+    // Telegram API check (getMe with the bot token).
+    telegramOk: v.optional(v.boolean()),
+    telegramUsername: v.optional(v.string()),
+    telegramLatencyMs: v.optional(v.number()),
+    telegramOkAt: v.optional(v.string()),
+    telegramError: v.optional(v.string()),
+    // Newest timestamp found in the logs (or users) table.
+    lastActivityAt: v.optional(v.string()),
+    // Alerts go to this Telegram chat id, sent through the bot itself.
+    alertChatId: v.optional(v.string()),
+    // Signature of the problems already reported, so alerts are not repeated.
+    alertState: v.optional(v.string()),
   }).index("by_owner", ["ownerToken"]),
+
+  // VPS agent: a small script on the server posts its metrics here.
+  // Kept apart from bots because it is rewritten every minute.
+  agents: defineTable({
+    botId: v.id("bots"),
+    key: v.string(),
+    receivedAt: v.optional(v.string()),
+    cpu: v.optional(v.number()),
+    ramPercent: v.optional(v.number()),
+    ramUsedMb: v.optional(v.number()),
+    ramTotalMb: v.optional(v.number()),
+    load1: v.optional(v.number()),
+    uptimeSec: v.optional(v.number()),
+    service: v.optional(v.string()),
+    serviceState: v.optional(v.string()),
+  })
+    .index("by_bot", ["botId"])
+    .index("by_key", ["key"]),
 });
