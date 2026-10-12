@@ -1,0 +1,22 @@
+[Unit]
+Description=Bot Control Center Telegram Admin Bot
+After=network.target
+
+[Service]
+Type=simple
+User=bcc
+Group=bcc
+WorkingDirectory=/opt/bot-control-center/backend
+EnvironmentFile=/etc/bot-control-center/bcc.env
+ExecStart=/opt/bot-control-center/backend/.venv/bin/python -m app.telegram_admin.main
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/bot-control-center/backend
+
+[Install]
+WantedBy=multi-user.target

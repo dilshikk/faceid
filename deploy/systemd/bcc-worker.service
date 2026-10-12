@@ -1,0 +1,25 @@
+[Unit]
+Description=Bot Control Center Monitoring Worker
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=bcc
+Group=bcc
+# Needs read access to systemctl show / journalctl for allowlisted units only.
+# Grant via a dedicated polkit rule or sudoers entry scoped to those exact
+# commands - never a blanket "sudo systemctl *".
+WorkingDirectory=/opt/bot-control-center/backend
+EnvironmentFile=/etc/bot-control-center/bcc.env
+ExecStart=/opt/bot-control-center/backend/.venv/bin/python -m app.workers.monitor_worker
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/bot-control-center/backend
+
+[Install]
+WantedBy=multi-user.target

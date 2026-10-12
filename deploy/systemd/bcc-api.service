@@ -1,0 +1,25 @@
+[Unit]
+Description=Bot Control Center API
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=bcc
+Group=bcc
+WorkingDirectory=/opt/bot-control-center/backend
+EnvironmentFile=/etc/bot-control-center/bcc.env
+ExecStart=/opt/bot-control-center/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8081
+Restart=on-failure
+RestartSec=5
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/bot-control-center/backend
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target
