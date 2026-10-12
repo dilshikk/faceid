@@ -1,12 +1,13 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "../hooks/useApi.ts";
 import Layout from "../components/Layout.tsx";
-import LoginPage from "../pages/LoginPage.tsx";
-import DashboardPage from "../pages/DashboardPage.tsx";
-import ServicesPage from "../pages/ServicesPage.tsx";
-import ServiceDetailPage from "../pages/ServiceDetailPage.tsx";
-import IncidentsPage from "../pages/IncidentsPage.tsx";
-import SettingsPage from "../pages/SettingsPage.tsx";
+import Login from "../pages/Login.tsx";
+import Dashboard from "../pages/Dashboard.tsx";
+import Services from "../pages/Services.tsx";
+import ServiceDetails from "../pages/ServiceDetails.tsx";
+import Logs from "../pages/Logs.tsx";
+import Incidents from "../pages/Incidents.tsx";
+import Settings from "../pages/Settings.tsx";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -18,13 +19,13 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={<LoginPage />} />
+        <Route path="/login" element={<Login />} />
         <Route
           path="/"
           element={
             <RequireAuth>
               <Layout>
-                <DashboardPage />
+                <Dashboard />
               </Layout>
             </RequireAuth>
           }
@@ -34,7 +35,7 @@ export default function App() {
           element={
             <RequireAuth>
               <Layout>
-                <ServicesPage />
+                <Services />
               </Layout>
             </RequireAuth>
           }
@@ -44,7 +45,17 @@ export default function App() {
           element={
             <RequireAuth>
               <Layout>
-                <ServiceDetailPage />
+                <ServiceDetails />
+              </Layout>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/services/:id/logs"
+          element={
+            <RequireAuth>
+              <Layout>
+                <Logs />
               </Layout>
             </RequireAuth>
           }
@@ -54,7 +65,7 @@ export default function App() {
           element={
             <RequireAuth>
               <Layout>
-                <IncidentsPage />
+                <Incidents />
               </Layout>
             </RequireAuth>
           }
@@ -64,7 +75,7 @@ export default function App() {
           element={
             <RequireAuth>
               <Layout>
-                <SettingsPage />
+                <Settings />
               </Layout>
             </RequireAuth>
           }
