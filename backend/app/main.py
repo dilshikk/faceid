@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.v1 import auth, dashboard, incidents, metrics, notifications, services
+from app.api.v1 import auth, dashboard, health, incidents, metrics, notifications, services
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 
@@ -24,6 +24,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(dashboard.router, prefix="/api/v1")
 app.include_router(services.router, prefix="/api/v1")
@@ -44,5 +45,6 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 @app.get("/healthz")
 def healthz():
-    # Does not reveal configuration, passwords, or connection strings.
+    # Kept for backwards compatibility with deploy/nginx/bcc.conf.
+    # Prefer /api/v1/health/live and /api/v1/health/ready for new integrations.
     return {"status": "ok"}
