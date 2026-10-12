@@ -59,4 +59,11 @@ export type NotificationSetting = {
   recipient: string;
   cooldown_seconds: number;
   enabled: boolean;
+  silence_until: string | null;
+};
+
+// Cursor-paginated list response (TZ 7: bounded response size).
+export type Page<T> = {
+  items: T[];
+  next_cursor: string | null;
 };
