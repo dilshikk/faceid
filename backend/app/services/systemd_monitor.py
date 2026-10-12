@@ -31,9 +31,27 @@ def _map_state(active_state: str, sub_state: str) -> ServiceStatus:
     return ServiceStatus.unknown
 
 
+def is_valid_unit_name(unit_name: str) -> bool:
+    return bool(unit_name) and unit_name.endswith(".service") and "/" not in unit_name and " " not in unit_name
+
+
+def normalize_unit_name(raw: str) -> str:
+    """Append `.service` if the caller omitted it.
+
+    The TZ's own Telegram command examples use short names
+    (`/service mado-bot`), but unit_name is always stored with the
+    `.service` suffix. Without this, those example commands never matched
+    any registered service.
+    """
+    name = raw.strip()
+    if name and not name.endswith(".service"):
+        name = f"{name}.service"
+    return name
+
+
 async def read_unit_status(unit_name: str) -> SystemdStatus:
     """Run a fixed, read-only `systemctl show` for a single allowlisted unit."""
-    if not unit_name.endswith(".service") or "/" in unit_name or " " in unit_name:
+    if not is_valid_unit_name(unit_name):
         return SystemdStatus(ServiceStatus.unknown, None, None)
 
     try:

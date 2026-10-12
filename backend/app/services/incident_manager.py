@@ -4,6 +4,7 @@ Per TZ section 5: an incident is only confirmed after N consecutive failed
 checks, deduplicated by (service, fingerprint), with a recovery notice sent
 separately when the service returns to active.
 """
+import datetime as dt
 import hashlib
 
 from sqlalchemy.orm import Session
@@ -39,7 +40,11 @@ def evaluate(
         existing = open_incident_for_fingerprint(db, service.id, fingerprint)
 
         if existing is not None:
-            existing.last_seen = existing.last_seen  # touched by caller via commit
+            # Bump last_seen so repeat detections of the same open incident
+            # are reflected (previously this assigned the field to itself,
+            # a no-op that left last_seen frozen at its first value).
+            existing.last_seen = dt.datetime.now(dt.timezone.utc)
+            db.commit()
             return IncidentOutcome(existing, False, None)
 
         if consecutive_failures < threshold:
@@ -64,6 +69,7 @@ def evaluate(
         recovered = None
         for inc in open_incidents:
             inc.status = IncidentStatus.resolved
+            inc.resolved_at = dt.datetime.now(dt.timezone.utc)
             recovered = inc
         if open_incidents:
             db.commit()

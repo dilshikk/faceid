@@ -1,7 +1,7 @@
 """Sends Telegram notifications. Delivery failures never block monitoring.
 
 Per TZ section 5/8: messages are short, contain no secrets or full
-tracebacks, and respect per-setting cooldowns.
+tracebacks, and respect per-setting cooldowns and silences.
 """
 import datetime as dt
 
@@ -9,7 +9,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.models import Incident, MonitoredService, NotificationDelivery
+from app.models.models import Incident, MonitoredService, NotificationDelivery, NotificationSetting
 
 
 async def send_telegram_message(chat_id: int, text: str) -> tuple[bool, str | None]:
@@ -40,6 +40,33 @@ def format_recovery_message(service: MonitoredService) -> str:
     return f"<b>Сервис:</b> {service.unit_name}\n<b>Состояние:</b> восстановлен"
 
 
+def is_notification_allowed(db: Session, event_type: str) -> bool:
+    """Check notification_settings for an enabled, non-silenced row for this
+    event type (or the "all" wildcard). Previously /silence was a Telegram
+    placeholder with no effect on actual sends; this wires it up.
+
+    If no settings exist yet for telegram at all, default to allowed so
+    notifications keep working out of the box (TZ 5/8 default behaviour).
+    """
+    rows = (
+        db.query(NotificationSetting)
+        .filter(NotificationSetting.channel == "telegram")
+        .filter(NotificationSetting.event_type.in_([event_type, "all"]))
+        .all()
+    )
+    if not rows:
+        return True
+
+    now = dt.datetime.now(dt.timezone.utc)
+    for row in rows:
+        if not row.enabled:
+            continue
+        if row.silence_until and row.silence_until > now:
+            continue
+        return True
+    return False
+
+
 async def notify_admins(db: Session, chat_ids: list[int], text: str, incident_id: str | None) -> None:
     for chat_id in chat_ids:
         success, error = await send_telegram_message(chat_id, text)
@@ -52,4 +79,6 @@ async def notify_admins(db: Session, chat_ids: list[int], text: str, incident_id
                 error=error,
             )
         )
-    db.commit()
+        # Commit per-send so a crash mid-loop doesn't lose delivery
+        # bookkeeping for messages that already went out.
+        db.commit()
